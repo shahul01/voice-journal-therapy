@@ -15,6 +15,17 @@
 		"test:unit": "vitest",
 		"test": "npm run test:unit -- --run"
 	},
+	"pnpm": {
+		"onlyBuiltDependencies": [
+			"esbuild"
+		]
+	},
+	"dependencies": {
+		"@elevenlabs/elevenlabs-js": "^2.28.0",
+		"@google-cloud/vertexai": "^1.10.0",
+		"@vite-pwa/sveltekit": "^1.1.0",
+		"dotenv": "^17.2.3"
+	},
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",
 		"@eslint/js": "^9.39.1",
@@ -42,10 +53,5 @@
 		"vite": "^7.2.6",
 		"vitest": "^4.0.15",
 		"vitest-browser-svelte": "^2.0.1"
-	},
-	"pnpm": {
-		"onlyBuiltDependencies": [
-			"esbuild"
-		]
 	}
 }

@@ -1,4 +1,8 @@
-# sv
+# voice-journal-therapy
+
+A SvelteKit project for a voice journal therapy app.
+
+## sv
 
 Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
 
