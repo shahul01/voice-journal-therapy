@@ -1,2 +1,34 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/typography';
+
+body {
+	@apply flex h-screen flex-col items-center justify-center;
+	@apply h-full w-full;
+
+	@apply p-4;
+
+	@apply bg-gray-100 dark:bg-gray-900;
+	@apply text-gray-900 dark:text-gray-100;
+
+	@apply font-sans;
+	@apply text-2xl font-light;
+	@apply text-center;
+	@apply rounded-lg;
+	@apply shadow-lg;
+}
+
+button {
+	@apply bg-blue-500 dark:bg-blue-800;
+	@apply text-white dark:text-gray-100;
+	@apply font-sans;
+	@apply text-2xl font-light;
+	@apply text-center;
+	@apply rounded-lg;
+	@apply shadow-lg;
+	@apply mx-4 my-2;
+	@apply p-2;
+	@apply cursor-pointer;
+	@apply hover:bg-blue-600 dark:hover:bg-blue-700;
+	@apply hover:text-white dark:hover:text-gray-100;
+	@apply hover:shadow-xl;
+}
