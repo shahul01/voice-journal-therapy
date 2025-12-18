@@ -1,0 +1,378 @@
+import { AudioCapture, type AudioCaptureConfig } from '$lib/utils/audio/capture';
+import { AudioPlayback } from '$lib/utils/audio/playback';
+import { VoiceActivityDetector } from '$lib/utils/audio/vad';
+import { convertToWav } from '$lib/utils/audio/wav-converter';
+import { addMessage, getContextForGemini } from './index';
+import type { ConversationState } from '$lib/types/conversation';
+import type { Profile } from '$lib/types/profile';
+
+function downloadAndLogAudio(audioBlob: Blob, prefix: string = 'recording'): void {
+	if (typeof window === 'undefined') return;
+
+	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+	const filename = `${prefix}_${timestamp}.wav`;
+
+	const url = URL.createObjectURL(audioBlob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = filename;
+	document.body.appendChild(a);
+	a.click();
+	document.body.removeChild(a);
+	URL.revokeObjectURL(url);
+
+	console.log(`[Audio] Downloaded: ${filename}`, {
+		size: audioBlob.size,
+		type: audioBlob.type,
+		timestamp: new Date().toISOString()
+	});
+}
+
+export interface OrchestratorConfig {
+	onTranscriptUpdate: (state: ConversationState) => void;
+	onError: (error: Error) => void;
+	onStateChange: (state: 'idle' | 'listening' | 'processing' | 'speaking') => void;
+	profile: Profile;
+}
+
+export class ConversationOrchestrator {
+	private audioCapture: AudioCapture | null = null;
+	private audioPlayback: AudioPlayback;
+	private vad: VoiceActivityDetector | null = null;
+	private conversationState: ConversationState;
+	private isRecording = false;
+	private isProcessing = false;
+	private audioChunks: Blob[] = [];
+	private currentState: 'idle' | 'listening' | 'processing' | 'speaking' = 'idle';
+	private speechEndTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	constructor(private config: OrchestratorConfig) {
+		this.audioPlayback = new AudioPlayback();
+		this.conversationState = { messages: [], contextWindow: [] };
+	}
+
+	async start(): Promise<void> {
+		if (this.isRecording) return;
+
+		this.isRecording = true;
+		this.audioChunks = [];
+		this.updateState('listening');
+
+		const captureConfig: AudioCaptureConfig = {
+			onDataAvailable: (blob) => {
+				this.audioChunks.push(blob);
+			},
+			onError: (error) => {
+				this.config.onError(error);
+				this.stop();
+			},
+			chunkInterval: 1000
+		};
+
+		this.audioCapture = new AudioCapture(captureConfig);
+		await this.audioCapture.start();
+
+		if (this.audioCapture?.stream) {
+			this.setupVAD(this.audioCapture.stream);
+		}
+	}
+
+	private setupVAD(stream: MediaStream): void {
+		this.vad = new VoiceActivityDetector({
+			threshold: 30,
+			silenceDuration: 1500,
+			onSpeechStart: () => {
+				if (this.currentState === 'speaking') {
+					this.interruptAI();
+				}
+			},
+			onSpeechEnd: () => {
+				if (this.speechEndTimeout) {
+					clearTimeout(this.speechEndTimeout);
+				}
+				this.speechEndTimeout = setTimeout(() => {
+					if (this.isRecording && !this.isProcessing) {
+						this.processUserSpeech();
+					}
+				}, 500);
+			}
+		});
+
+		this.vad.start(stream);
+	}
+
+	stop(): void {
+		this.isRecording = false;
+
+		if (this.speechEndTimeout) {
+			clearTimeout(this.speechEndTimeout);
+			this.speechEndTimeout = null;
+		}
+
+		if (this.audioCapture) {
+			this.audioCapture.stop();
+			this.audioCapture = null;
+		}
+
+		if (this.vad) {
+			this.vad.stop();
+			this.vad = null;
+		}
+
+		if (this.audioChunks.length > 0 && !this.isProcessing) {
+			this.processUserSpeech();
+		} else {
+			this.updateState('idle');
+		}
+	}
+
+	private async processUserSpeech(): Promise<void> {
+		if (this.isProcessing || this.audioChunks.length === 0) return;
+
+		this.isProcessing = true;
+		this.updateState('processing');
+
+		const wasRecording = this.isRecording;
+		if (this.audioCapture) {
+			this.audioCapture.stop();
+		}
+
+		try {
+			const audioBlob = new Blob(this.audioChunks);
+			this.audioChunks = [];
+
+			if (audioBlob.size < 100) {
+				this.isProcessing = false;
+				if (wasRecording) {
+					await this.start();
+				} else {
+					this.updateState('idle');
+				}
+				return;
+			}
+
+			const wavBlob = await convertToWav(audioBlob);
+			downloadAndLogAudio(wavBlob, 'recording');
+			const transcribedText = await this.transcribeAudio(wavBlob);
+			if (!transcribedText.trim()) {
+				this.isProcessing = false;
+				if (wasRecording) {
+					await this.start();
+				} else {
+					this.updateState('idle');
+				}
+				return;
+			}
+
+			this.conversationState = addMessage(this.conversationState, 'user', transcribedText);
+			this.config.onTranscriptUpdate(this.conversationState);
+
+			const aiResponse = await this.getAIResponse();
+			if (!aiResponse.trim()) {
+				this.isProcessing = false;
+				if (wasRecording) {
+					await this.start();
+				} else {
+					this.updateState('idle');
+				}
+				return;
+			}
+
+			this.conversationState = addMessage(this.conversationState, 'ai', aiResponse);
+			this.config.onTranscriptUpdate(this.conversationState);
+
+			await this.speakResponse(aiResponse);
+
+			this.isProcessing = false;
+
+			if (wasRecording && this.isRecording) {
+				await this.start();
+			} else {
+				this.updateState('idle');
+			}
+		} catch (error) {
+			this.isProcessing = false;
+			const errorMessage = error instanceof Error ? error.message : 'Processing failed';
+			this.config.onError(new Error(errorMessage));
+
+			if (wasRecording && this.isRecording) {
+				try {
+					await this.start();
+				} catch (restartError) {
+					this.config.onError(
+						restartError instanceof Error ? restartError : new Error('Failed to restart recording')
+					);
+					this.updateState('idle');
+				}
+			} else {
+				this.updateState('idle');
+			}
+		}
+	}
+
+	private async transcribeAudio(audioBlob: Blob): Promise<string> {
+		const formData = new FormData();
+		formData.append('audio', audioBlob, 'audio.wav');
+
+		let response: Response;
+		try {
+			response = await fetch('/api/v1/elevenlabs/stt', {
+				method: 'POST',
+				body: formData
+			});
+		} catch (err) {
+			throw new Error(
+				`Network error during transcription: ${err instanceof Error ? err.message : 'Unknown error'}`
+			);
+		}
+
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => response.statusText);
+			throw new Error(`STT failed (${response.status}): ${errorText}`);
+		}
+
+		const data = await response.json().catch(() => ({ text: '' }));
+		return data.text || '';
+	}
+
+	private async getAIResponse(): Promise<string> {
+		const context = getContextForGemini(this.conversationState);
+
+		let response: Response;
+		try {
+			response = await fetch('/api/v1/google/gemini', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					messages: context,
+					stream: false
+				})
+			});
+		} catch (err) {
+			throw new Error(
+				`Network error during AI response: ${err instanceof Error ? err.message : 'Unknown error'}`
+			);
+		}
+
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => response.statusText);
+			throw new Error(`Gemini API failed (${response.status}): ${errorText}`);
+		}
+
+		const data = await response.json().catch(() => ({ text: '' }));
+		return data.text || '';
+	}
+
+	private async speakResponse(text: string): Promise<void> {
+		this.updateState('speaking');
+
+		let response: Response;
+		try {
+			response = await fetch('/api/v1/elevenlabs/tts', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					text,
+					voiceId: this.config.profile.config.voice_id,
+					modelId: 'eleven_flash_v2_5',
+					stability: 0.5,
+					similarityBoost: 0.75,
+					speed: parseFloat(this.config.profile.config.Speed) || 0.95
+				})
+			});
+		} catch (err) {
+			throw new Error(
+				`Network error during speech generation: ${err instanceof Error ? err.message : 'Unknown error'}`
+			);
+		}
+
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => response.statusText);
+			throw new Error(`TTS failed (${response.status}): ${errorText}`);
+		}
+
+		const audioData = await response.arrayBuffer().catch(() => {
+			throw new Error('Failed to read audio data from response');
+		});
+
+		return new Promise((resolve, reject) => {
+			this.audioPlayback.play(audioData, () => {
+				if (this.currentState === 'speaking') {
+					this.updateState('idle');
+				}
+				resolve();
+			});
+		});
+	}
+
+	private updateState(state: 'idle' | 'listening' | 'processing' | 'speaking'): void {
+		this.currentState = state;
+		this.config.onStateChange(state);
+	}
+
+	interruptAI(): void {
+		this.audioPlayback.stop();
+		if (this.currentState === 'speaking') {
+			this.updateState('idle');
+		}
+	}
+
+	getState(): 'idle' | 'listening' | 'processing' | 'speaking' {
+		return this.currentState;
+	}
+
+	getConversationState(): ConversationState {
+		return this.conversationState;
+	}
+
+	async processDemoAudio(audioUrl: string): Promise<void> {
+		if (this.isProcessing) return;
+
+		this.isProcessing = true;
+		this.updateState('processing');
+
+		try {
+			const response = await fetch(audioUrl);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch demo audio: ${response.statusText}`);
+			}
+
+			const audioBlob = await response.blob();
+			downloadAndLogAudio(audioBlob, 'demo');
+			const transcribedText = await this.transcribeAudio(audioBlob);
+
+			if (!transcribedText.trim()) {
+				this.isProcessing = false;
+				this.updateState('idle');
+				return;
+			}
+
+			this.conversationState = addMessage(this.conversationState, 'user', transcribedText);
+			this.config.onTranscriptUpdate(this.conversationState);
+
+			const aiResponse = await this.getAIResponse();
+			if (!aiResponse.trim()) {
+				this.isProcessing = false;
+				this.updateState('idle');
+				return;
+			}
+
+			this.conversationState = addMessage(this.conversationState, 'ai', aiResponse);
+			this.config.onTranscriptUpdate(this.conversationState);
+
+			await this.speakResponse(aiResponse);
+
+			this.isProcessing = false;
+			this.updateState('idle');
+		} catch (error) {
+			this.isProcessing = false;
+			const errorMessage = error instanceof Error ? error.message : 'Processing demo audio failed';
+			this.config.onError(new Error(errorMessage));
+			this.updateState('idle');
+		}
+	}
+}
