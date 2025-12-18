@@ -1,6 +1,8 @@
 // TODO: user specific profiles based on db
 
-const profiles = [
+import type { Profile } from '$lib/types/profile';
+
+const profiles: Profile[] = [
 	{
 		id: '1',
 		name: 'Calming 1',
