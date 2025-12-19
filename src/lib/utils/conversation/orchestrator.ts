@@ -32,6 +32,7 @@ export interface OrchestratorConfig {
 	onTranscriptUpdate: (state: ConversationState) => void;
 	onError: (error: Error) => void;
 	onStateChange: (state: 'idle' | 'listening' | 'processing' | 'speaking') => void;
+	onRecordingStateChange?: (isRecording: boolean) => void;
 	profile: Profile;
 }
 
@@ -42,6 +43,7 @@ export class ConversationOrchestrator {
 	private conversationState: ConversationState;
 	private isRecording = false;
 	private isProcessing = false;
+	private manualStop = false;
 	private audioChunks: Blob[] = [];
 	private currentState: 'idle' | 'listening' | 'processing' | 'speaking' = 'idle';
 	private speechEndTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -53,11 +55,14 @@ export class ConversationOrchestrator {
 	}
 
 	async start(): Promise<void> {
-		if (this.isRecording) return;
+		// Only skip if we're already actively capturing (not just if flag is set)
+		if (this.isRecording && this.audioCapture) return;
 
+		this.manualStop = false;
 		this.isRecording = true;
 		this.audioChunks = [];
 		this.updateState('listening');
+		this.config.onRecordingStateChange?.(true);
 
 		const captureConfig: AudioCaptureConfig = {
 			onDataAvailable: (blob) => {
@@ -103,7 +108,9 @@ export class ConversationOrchestrator {
 	}
 
 	stop(): void {
+		this.manualStop = true;
 		this.isRecording = false;
+		this.config.onRecordingStateChange?.(false);
 
 		if (this.speechEndTimeout) {
 			clearTimeout(this.speechEndTimeout);
@@ -120,11 +127,9 @@ export class ConversationOrchestrator {
 			this.vad = null;
 		}
 
-		if (this.audioChunks.length > 0 && !this.isProcessing) {
-			this.processUserSpeech();
-		} else {
-			this.updateState('idle');
-		}
+		// When manually stopped, don't process pending chunks - just stop everything
+		this.audioChunks = [];
+		this.updateState('idle');
 	}
 
 	private async processUserSpeech(): Promise<void> {
@@ -134,8 +139,10 @@ export class ConversationOrchestrator {
 		this.updateState('processing');
 
 		const wasRecording = this.isRecording;
+		// Temporarily stop capture during processing, but maintain recording intent
 		if (this.audioCapture) {
 			this.audioCapture.stop();
+			this.audioCapture = null;
 		}
 
 		try {
@@ -144,7 +151,7 @@ export class ConversationOrchestrator {
 
 			if (audioBlob.size < 100) {
 				this.isProcessing = false;
-				if (wasRecording) {
+				if (wasRecording && !this.manualStop) {
 					await this.start();
 				} else {
 					this.updateState('idle');
@@ -157,7 +164,7 @@ export class ConversationOrchestrator {
 			const transcribedText = await this.transcribeAudio(wavBlob);
 			if (!transcribedText.trim()) {
 				this.isProcessing = false;
-				if (wasRecording) {
+				if (wasRecording && !this.manualStop) {
 					await this.start();
 				} else {
 					this.updateState('idle');
@@ -171,7 +178,7 @@ export class ConversationOrchestrator {
 			const aiResponse = await this.getAIResponse();
 			if (!aiResponse.trim()) {
 				this.isProcessing = false;
-				if (wasRecording) {
+				if (wasRecording && !this.manualStop) {
 					await this.start();
 				} else {
 					this.updateState('idle');
@@ -186,7 +193,8 @@ export class ConversationOrchestrator {
 
 			this.isProcessing = false;
 
-			if (wasRecording && this.isRecording) {
+			// Auto-restart only if was recording and user didn't manually stop
+			if (wasRecording && !this.manualStop) {
 				await this.start();
 			} else {
 				this.updateState('idle');
@@ -196,7 +204,7 @@ export class ConversationOrchestrator {
 			const errorMessage = error instanceof Error ? error.message : 'Processing failed';
 			this.config.onError(new Error(errorMessage));
 
-			if (wasRecording && this.isRecording) {
+			if (wasRecording && !this.manualStop) {
 				try {
 					await this.start();
 				} catch (restartError) {
@@ -314,9 +322,8 @@ export class ConversationOrchestrator {
 
 		return new Promise((resolve, reject) => {
 			this.audioPlayback.play(audioData, () => {
-				if (this.currentState === 'speaking') {
-					this.updateState('idle');
-				}
+				// Don't update state here - let processUserSpeech handle state transitions
+				// This prevents race conditions and ensures smooth flow
 				resolve();
 			});
 		});

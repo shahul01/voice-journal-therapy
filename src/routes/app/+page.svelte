@@ -29,6 +29,9 @@
 			onStateChange: (state) => {
 				currentState = state;
 			},
+			onRecordingStateChange: (isRecording) => {
+				isListening = isRecording;
+			},
 			profile: selectedProfile
 		});
 	});
@@ -66,7 +69,6 @@
 		if (isListening) {
 			try {
 				orchestrator.stop();
-				isListening = false;
 				errorMessage = null;
 			} catch (err) {
 				errorMessage = err instanceof Error ? err.message : 'Failed to stop recording';
@@ -75,13 +77,11 @@
 			try {
 				errorMessage = null;
 				await orchestrator.start();
-				isListening = true;
 			} catch (err) {
 				errorMessage =
 					err instanceof Error
 						? err.message
 						: 'Failed to start recording. Please check microphone permissions.';
-				isListening = false;
 			}
 		}
 	}
@@ -133,7 +133,7 @@
 	<RateLimitIndicator />
 
 	<div class="voice-controls">
-		<div class="state-indicator" style="background-color: {getStateColor()}">
+		<div class="state-indicator" style="color: {getStateColor()}">
 			<span class="state-dot"></span>
 			<span class="state-text">{getStateLabel()}</span>
 		</div>
@@ -152,14 +152,14 @@
 			{/if}
 		</button>
 
-		<button
+		<!-- <button
 			class="demo-button"
 			onclick={sendDemoAudio}
 			disabled={currentState === 'processing' || isListening}
 		>
 			<span class="button-icon">🎵</span>
 			Send Demo Audio
-		</button>
+		</button> -->
 
 		{#if errorMessage}
 			<div class="error-message">{errorMessage}</div>
@@ -198,7 +198,7 @@
 	h1 {
 		font-size: 2rem;
 		margin-bottom: 1rem;
-		color: hsl(220, 30%, 20%);
+		color: hsl(220, 30%, 60%);
 	}
 
 	.dark h1 {
