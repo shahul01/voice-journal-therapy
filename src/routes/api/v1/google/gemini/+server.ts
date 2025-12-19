@@ -2,16 +2,15 @@ import { GOOGLE_GEMINI_API_KEY } from '$env/static/private';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-const THERAPIST_SYSTEM_PROMPT = `You are an empathetic and intelligent therapist helping users through voice journal therapy. Your role is to:
-- Listen actively and respond with genuine empathy
-- Guide users toward self-reflection and understanding
-- Provide gentle, supportive guidance for both immediate relief and long-term growth
-- Keep responses conversational and natural (not clinical or robotic)
-- Be concise but meaningful - this is a voice conversation, so responses should be appropriate for speech
-- Help users feel heard, understood, and supported
-- Encourage healthy coping strategies and positive thinking patterns
+// Compressed system prompt to reduce token usage
+const THERAPIST_SYSTEM_PROMPT = `Empathetic voice therapy assistant. Listen actively, respond naturally with warmth and understanding. Guide self-reflection gently. Keep responses concise for speech. Be supportive, not clinical.`;
 
-Respond as if you're having a natural conversation. Be warm, understanding, and helpful.`;
+interface RateLimitError {
+	status: number;
+	message: string;
+	retryAfter?: number;
+	type: 'rate_limit' | 'quota_exceeded' | 'unknown';
+}
 
 function extractRetryDelay(errorData: any): number | null {
 	try {
@@ -35,6 +34,25 @@ function extractRetryDelay(errorData: any): number | null {
 		// Ignore parsing errors
 	}
 	return null;
+}
+
+function parseRateLimitError(response: Response, errorData: any): RateLimitError {
+	const retryAfter = extractRetryDelay(errorData);
+	const message = errorData?.error?.message || response.statusText;
+
+	let type: 'rate_limit' | 'quota_exceeded' | 'unknown' = 'unknown';
+	if (message.toLowerCase().includes('quota') || message.toLowerCase().includes('daily')) {
+		type = 'quota_exceeded';
+	} else if (response.status === 429) {
+		type = 'rate_limit';
+	}
+
+	return {
+		status: response.status,
+		message,
+		retryAfter: retryAfter || undefined,
+		type
+	};
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -72,7 +90,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 		};
 
-		const modelName = 'gemini-2.5-flash-lite';
+		const modelName = 'gemini-2.5-flash';
 		const maxRetries = 3;
 		let lastError: Error | null = null;
 
@@ -93,10 +111,35 @@ export const POST: RequestHandler = async ({ request }) => {
 					if (!response.ok) {
 						if (response.status === 429 && attempt < maxRetries) {
 							const errorData = await response.json().catch(() => ({}));
-							const retryDelay = extractRetryDelay(errorData) || Math.pow(2, attempt) * 1000;
+							const rateLimitError = parseRateLimitError(response, errorData);
+
+							console.error('[Gemini API] Rate limit error (stream):', {
+								attempt: attempt + 1,
+								type: rateLimitError.type,
+								retryAfter: rateLimitError.retryAfter,
+								message: rateLimitError.message
+							});
+
+							const retryDelay = rateLimitError.retryAfter || Math.pow(2, attempt) * 1000;
 							await new Promise((resolve) => setTimeout(resolve, retryDelay));
 							continue;
 						}
+
+						const errorData = await response.json().catch(() => ({}));
+						if (response.status === 429) {
+							const rateLimitError = parseRateLimitError(response, errorData);
+							console.error('[Gemini API] Rate limit exceeded (stream):', rateLimitError);
+							throw error(
+								response.status,
+								JSON.stringify({
+									error: 'Rate limit exceeded',
+									type: rateLimitError.type,
+									retryAfter: rateLimitError.retryAfter,
+									message: rateLimitError.message
+								})
+							);
+						}
+
 						const errorText = await response.text();
 						throw error(response.status, `Gemini API error: ${errorText}`);
 					}
@@ -123,10 +166,35 @@ export const POST: RequestHandler = async ({ request }) => {
 					if (!response.ok) {
 						if (response.status === 429 && attempt < maxRetries) {
 							const errorData = await response.json().catch(() => ({}));
-							const retryDelay = extractRetryDelay(errorData) || Math.pow(2, attempt) * 1000;
+							const rateLimitError = parseRateLimitError(response, errorData);
+
+							console.error('[Gemini API] Rate limit error:', {
+								attempt: attempt + 1,
+								type: rateLimitError.type,
+								retryAfter: rateLimitError.retryAfter,
+								message: rateLimitError.message
+							});
+
+							const retryDelay = rateLimitError.retryAfter || Math.pow(2, attempt) * 1000;
 							await new Promise((resolve) => setTimeout(resolve, retryDelay));
 							continue;
 						}
+
+						const errorData = await response.json().catch(() => ({}));
+						if (response.status === 429) {
+							const rateLimitError = parseRateLimitError(response, errorData);
+							console.error('[Gemini API] Rate limit exceeded:', rateLimitError);
+							throw error(
+								response.status,
+								JSON.stringify({
+									error: 'Rate limit exceeded',
+									type: rateLimitError.type,
+									retryAfter: rateLimitError.retryAfter,
+									message: rateLimitError.message
+								})
+							);
+						}
+
 						const errorText = await response.text();
 						throw error(response.status, `Gemini API error: ${errorText}`);
 					}

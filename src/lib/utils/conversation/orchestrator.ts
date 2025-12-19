@@ -45,6 +45,7 @@ export class ConversationOrchestrator {
 	private audioChunks: Blob[] = [];
 	private currentState: 'idle' | 'listening' | 'processing' | 'speaking' = 'idle';
 	private speechEndTimeout: ReturnType<typeof setTimeout> | null = null;
+	private pendingRequestPromise: Promise<string> | null = null;
 
 	constructor(private config: OrchestratorConfig) {
 		this.audioPlayback = new AudioPlayback();
@@ -236,33 +237,45 @@ export class ConversationOrchestrator {
 	}
 
 	private async getAIResponse(): Promise<string> {
+		// Prevent duplicate simultaneous requests
+		if (this.pendingRequestPromise) {
+			return this.pendingRequestPromise;
+		}
+
 		const context = getContextForGemini(this.conversationState);
 
-		let response: Response;
+		// Check cache first to reduce API calls
+		const { getCachedResponse, cacheResponse } = await import('$lib/utils/responseCache');
+		const cached = getCachedResponse(context);
+		if (cached) {
+			console.log('[Orchestrator] Using cached response, skipping API call');
+			return cached;
+		}
+
+		// Use request queue for rate limit protection
+		const { requestQueue } = await import('$lib/utils/requestQueue');
+		this.pendingRequestPromise = (async () => {
+			try {
+				const response = await requestQueue.enqueue(context, 'normal');
+
+				// Cache successful response
+				if (response) {
+					cacheResponse(context, response);
+				}
+
+				return response;
+			} finally {
+				this.pendingRequestPromise = null;
+			}
+		})();
+
 		try {
-			response = await fetch('/api/v1/google/gemini', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					messages: context,
-					stream: false
-				})
-			});
+			return await this.pendingRequestPromise;
 		} catch (err) {
 			throw new Error(
-				`Network error during AI response: ${err instanceof Error ? err.message : 'Unknown error'}`
+				`AI response failed: ${err instanceof Error ? err.message : 'Unknown error'}`
 			);
 		}
-
-		if (!response.ok) {
-			const errorText = await response.text().catch(() => response.statusText);
-			throw new Error(`Gemini API failed (${response.status}): ${errorText}`);
-		}
-
-		const data = await response.json().catch(() => ({ text: '' }));
-		return data.text || '';
 	}
 
 	private async speakResponse(text: string): Promise<void> {

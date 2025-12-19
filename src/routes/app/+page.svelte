@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import profiles from '$lib/utils/profile';
 	import { ConversationOrchestrator } from '$lib/utils/conversation/orchestrator';
+	import RateLimitIndicator from '$lib/components/RateLimitIndicator.svelte';
 	import type { ConversationState } from '$lib/types/conversation';
 	import type { Profile } from '$lib/types/profile';
 
@@ -76,7 +77,10 @@
 				await orchestrator.start();
 				isListening = true;
 			} catch (err) {
-				errorMessage = err instanceof Error ? err.message : 'Failed to start recording. Please check microphone permissions.';
+				errorMessage =
+					err instanceof Error
+						? err.message
+						: 'Failed to start recording. Please check microphone permissions.';
 				isListening = false;
 			}
 		}
@@ -86,7 +90,8 @@
 		if (!orchestrator || currentState === 'processing') return;
 
 		try {
-			const demoAudio = '/audio/ElevenLabs_2025-12-17T19_24_59_Brittney - Relaxing, Calm and Meditative_pvc_sp95_s50_sb75_f2-5.wav';
+			const demoAudio =
+				'/audio/ElevenLabs_2025-12-17T19_24_59_Brittney - Relaxing, Calm and Meditative_pvc_sp95_s50_sb75_f2-5.wav';
 			errorMessage = null;
 			await orchestrator.processDemoAudio(demoAudio);
 		} catch (err) {
@@ -125,13 +130,19 @@
 	<h1>Voice Journal Therapy</h1>
 	<p class="profile-info">Profile: {selectedProfile.name}</p>
 
+	<RateLimitIndicator />
+
 	<div class="voice-controls">
 		<div class="state-indicator" style="background-color: {getStateColor()}">
 			<span class="state-dot"></span>
 			<span class="state-text">{getStateLabel()}</span>
 		</div>
 
-		<button class="record-button" onclick={toggleListening} disabled={currentState === 'processing'}>
+		<button
+			class="record-button"
+			onclick={toggleListening}
+			disabled={currentState === 'processing'}
+		>
 			{#if isListening}
 				<span class="button-icon">⏹</span>
 				Stop Recording
@@ -141,7 +152,11 @@
 			{/if}
 		</button>
 
-		<button class="demo-button" onclick={sendDemoAudio} disabled={currentState === 'processing' || isListening}>
+		<button
+			class="demo-button"
+			onclick={sendDemoAudio}
+			disabled={currentState === 'processing' || isListening}
+		>
 			<span class="button-icon">🎵</span>
 			Send Demo Audio
 		</button>
