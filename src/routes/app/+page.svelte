@@ -83,10 +83,11 @@
 	}
 
 	async function handleProfileChange(newProfile: Profile) {
-		// Prevent switching during active states
-		if (currentState !== 'idle') {
-			errorMessage =
-				'Please wait until the current operation completes before changing the voice profile.';
+		// Allow seamless profile switching - don't block during active states
+		if (!orchestrator) {
+			// If no orchestrator exists, initialize it with the new profile
+			currentProfile = newProfile;
+			initializeOrchestrator(newProfile);
 			return;
 		}
 
@@ -94,30 +95,30 @@
 		errorMessage = null;
 
 		try {
-			// Stop any active recording and wait a bit for cleanup
-			if (orchestrator) {
-				console.log('[Profile] Stopping orchestrator before switch');
-				orchestrator.stop();
-				// Small delay to ensure cleanup completes
-				await new Promise((resolve) => setTimeout(resolve, 100));
-			}
+			const wasRecording = orchestrator.isRecordingActive();
+			const wasPlaying = orchestrator.isAudioPlaying();
 
-			// Update currentProfile immediately before reinitializing
-			currentProfile = newProfile;
-
-			// Reinitialize orchestrator with new profile (pass explicitly to avoid timing issues)
-			console.log('[Profile] Creating new orchestrator with profile:', {
-				name: newProfile.name,
-				id: newProfile.id,
-				voiceId: newProfile.config.voice_id
+			console.log('[Profile] Switching profile seamlessly:', {
+				newProfile: newProfile.name,
+				voiceId: newProfile.config.voice_id,
+				wasRecording,
+				wasPlaying
 			});
-			initializeOrchestrator(newProfile);
+
+			// Update profile in orchestrator without stopping operations
+			// This allows audio playback to continue and recording to persist
+			orchestrator.updateProfile(newProfile);
+
+			// Update currentProfile state
+			currentProfile = newProfile;
 
 			console.log(
 				'[Profile] Successfully switched to:',
 				newProfile.name,
 				'Voice ID:',
-				newProfile.config.voice_id
+				newProfile.config.voice_id,
+				wasRecording ? '(recording continues)' : '',
+				wasPlaying ? '(audio continues playing)' : ''
 			);
 		} catch (err) {
 			errorMessage =
@@ -217,7 +218,7 @@
 
 	<div class="profile-section">
 		<ProfileDropdown
-			disabled={isSwitchingProfile || currentState !== 'idle'}
+			disabled={isSwitchingProfile}
 			onProfileChange={handleProfileChange}
 		/>
 		{#if isSwitchingProfile}

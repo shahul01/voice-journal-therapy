@@ -385,6 +385,35 @@ export class ConversationOrchestrator {
 		return this.conversationState;
 	}
 
+	/**
+	 * Updates the profile without stopping current operations.
+	 * Audio playback and recording will continue uninterrupted.
+	 * The new profile will be used for the next TTS request.
+	 */
+	updateProfile(newProfile: Profile): void {
+		console.log('[Orchestrator] Updating profile:', {
+			oldProfile: this.config.profile.name,
+			newProfile: newProfile.name,
+			oldVoiceId: this.config.profile.config.voice_id,
+			newVoiceId: newProfile.config.voice_id
+		});
+		this.config.profile = newProfile;
+	}
+
+	/**
+	 * Checks if audio is currently playing.
+	 */
+	isAudioPlaying(): boolean {
+		return this.audioPlayback.isCurrentlyPlaying();
+	}
+
+	/**
+	 * Checks if recording is currently active.
+	 */
+	isRecordingActive(): boolean {
+		return this.isRecording && this.audioCapture !== null;
+	}
+
 	async processDemoAudio(audioUrl: string): Promise<void> {
 		if (this.isProcessing) return;
 
