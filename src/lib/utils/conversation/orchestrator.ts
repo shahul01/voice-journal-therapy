@@ -118,8 +118,12 @@ export class ConversationOrchestrator {
 		this.isProcessing = false;
 		this.config.onRecordingStateChange?.(false);
 
-		// Stop audio playback
-		this.audioPlayback.stop();
+		// Only stop audio playback if AI is not currently speaking
+		// This allows users to stop recording while still hearing the AI's response
+		const isAudioPlaying = this.audioPlayback.isCurrentlyPlaying();
+		if (!isAudioPlaying) {
+			this.audioPlayback.stop();
+		}
 
 		if (this.speechEndTimeout) {
 			clearTimeout(this.speechEndTimeout);
@@ -136,10 +140,15 @@ export class ConversationOrchestrator {
 			this.vad = null;
 		}
 
-		// When manually stopped, don't process pending chunks - just stop everything
+		// When manually stopped, don't process pending chunks - just stop recording
 		this.audioChunks = [];
 		this.pendingRequestPromise = null;
-		this.updateState('idle');
+
+		// Only update state to 'idle' if audio is not playing
+		// If audio is playing, let it finish naturally (state will be 'speaking')
+		if (!isAudioPlaying) {
+			this.updateState('idle');
+		}
 	}
 
 	private async processUserSpeech(): Promise<void> {
