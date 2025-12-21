@@ -50,6 +50,11 @@ export class ConversationOrchestrator {
 	private pendingRequestPromise: Promise<string> | null = null;
 
 	constructor(private config: OrchestratorConfig) {
+		console.log('[Orchestrator] Constructor called with profile:', {
+			name: config.profile.name,
+			id: config.profile.id,
+			voiceId: config.profile.config.voice_id
+		});
 		this.audioPlayback = new AudioPlayback();
 		this.conversationState = { messages: [], contextWindow: [] };
 	}
@@ -110,7 +115,11 @@ export class ConversationOrchestrator {
 	stop(): void {
 		this.manualStop = true;
 		this.isRecording = false;
+		this.isProcessing = false;
 		this.config.onRecordingStateChange?.(false);
+
+		// Stop audio playback
+		this.audioPlayback.stop();
 
 		if (this.speechEndTimeout) {
 			clearTimeout(this.speechEndTimeout);
@@ -129,6 +138,7 @@ export class ConversationOrchestrator {
 
 		// When manually stopped, don't process pending chunks - just stop everything
 		this.audioChunks = [];
+		this.pendingRequestPromise = null;
 		this.updateState('idle');
 	}
 
@@ -286,8 +296,34 @@ export class ConversationOrchestrator {
 		}
 	}
 
+	/**
+	 * Parses a percentage string (e.g., "50%") to a decimal (e.g., 0.5)
+	 */
+	private parsePercentage(value: string): number {
+		if (!value) return 0.5;
+		const cleaned = value.toString().replace('%', '').trim();
+		const parsed = parseFloat(cleaned);
+		if (isNaN(parsed)) return 0.5;
+		// If value is > 1, assume it's a percentage (50 = 0.5), otherwise use as-is
+		return parsed > 1 ? parsed / 100 : parsed;
+	}
+
 	private async speakResponse(text: string): Promise<void> {
 		this.updateState('speaking');
+
+		const voiceId = this.config.profile.config.voice_id;
+		const speed = parseFloat(this.config.profile.config.Speed) || 0.95;
+		const stability = this.parsePercentage(this.config.profile.config.Stability);
+		const similarityBoost = this.parsePercentage(this.config.profile.config['Similarity boost']);
+
+		console.log('[Orchestrator] TTS request:', {
+			profile: this.config.profile.name,
+			profileId: this.config.profile.id,
+			voiceId,
+			speed,
+			stability,
+			similarityBoost
+		});
 
 		let response: Response;
 		try {
@@ -298,11 +334,11 @@ export class ConversationOrchestrator {
 				},
 				body: JSON.stringify({
 					text,
-					voiceId: this.config.profile.config.voice_id,
+					voiceId,
 					modelId: 'eleven_flash_v2_5',
-					stability: 0.5,
-					similarityBoost: 0.75,
-					speed: parseFloat(this.config.profile.config.Speed) || 0.95
+					stability,
+					similarityBoost,
+					speed
 				})
 			});
 		} catch (err) {

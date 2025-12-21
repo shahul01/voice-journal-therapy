@@ -1,21 +1,65 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import profiles from '$lib/utils/profile';
+	import { get } from 'svelte/store';
+	import { selectedProfile } from '$lib/stores/profile';
 	import { ConversationOrchestrator } from '$lib/utils/conversation/orchestrator';
 	import RateLimitIndicator from '$lib/components/RateLimitIndicator.svelte';
+	import ProfileDropdown from '$lib/components/ProfileDropdown.svelte';
 	import type { ConversationState } from '$lib/types/conversation';
 	import type { Profile } from '$lib/types/profile';
 
 	let isListening = $state(false);
 	let conversationState = $state<ConversationState>({ messages: [], contextWindow: [] });
-	let selectedProfile = $state<Profile>(profiles[0]);
+	let currentProfile = $state<Profile>(get(selectedProfile));
 	let currentState = $state<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
 	let errorMessage = $state<string | null>(null);
+	let isSwitchingProfile = $state(false);
 
 	let orchestrator: ConversationOrchestrator | null = null;
+	let unsubscribeProfile: (() => void) | null = null;
 
 	onMount(() => {
 		loadConversationFromStorage();
+
+		// Log initial profile
+		console.log('[App] Initial profile loaded:', {
+			name: currentProfile.name,
+			id: currentProfile.id,
+			voiceId: currentProfile.config.voice_id
+		});
+
+		initializeOrchestrator();
+
+		// Subscribe to profile changes
+		unsubscribeProfile = selectedProfile.subscribe((profile) => {
+			currentProfile = profile;
+		});
+	});
+
+	onDestroy(() => {
+		if (orchestrator) {
+			orchestrator.stop();
+		}
+		if (unsubscribeProfile) {
+			unsubscribeProfile();
+		}
+	});
+
+	function initializeOrchestrator(profile?: Profile) {
+		const profileToUse = profile || currentProfile;
+
+		console.log('[App] initializeOrchestrator called with profile:', {
+			name: profileToUse.name,
+			id: profileToUse.id,
+			voiceId: profileToUse.config.voice_id,
+			wasPassed: profile !== undefined
+		});
+
+		if (orchestrator) {
+			console.log('[App] Stopping existing orchestrator');
+			orchestrator.stop();
+			orchestrator = null;
+		}
 
 		orchestrator = new ConversationOrchestrator({
 			onTranscriptUpdate: (state) => {
@@ -32,15 +76,57 @@
 			onRecordingStateChange: (isRecording) => {
 				isListening = isRecording;
 			},
-			profile: selectedProfile
+			profile: profileToUse
 		});
-	});
 
-	onDestroy(() => {
-		if (orchestrator) {
-			orchestrator.stop();
+		console.log('[App] Orchestrator created successfully');
+	}
+
+	async function handleProfileChange(newProfile: Profile) {
+		// Prevent switching during active states
+		if (currentState !== 'idle') {
+			errorMessage =
+				'Please wait until the current operation completes before changing the voice profile.';
+			return;
 		}
-	});
+
+		isSwitchingProfile = true;
+		errorMessage = null;
+
+		try {
+			// Stop any active recording and wait a bit for cleanup
+			if (orchestrator) {
+				console.log('[Profile] Stopping orchestrator before switch');
+				orchestrator.stop();
+				// Small delay to ensure cleanup completes
+				await new Promise((resolve) => setTimeout(resolve, 100));
+			}
+
+			// Update currentProfile immediately before reinitializing
+			currentProfile = newProfile;
+
+			// Reinitialize orchestrator with new profile (pass explicitly to avoid timing issues)
+			console.log('[Profile] Creating new orchestrator with profile:', {
+				name: newProfile.name,
+				id: newProfile.id,
+				voiceId: newProfile.config.voice_id
+			});
+			initializeOrchestrator(newProfile);
+
+			console.log(
+				'[Profile] Successfully switched to:',
+				newProfile.name,
+				'Voice ID:',
+				newProfile.config.voice_id
+			);
+		} catch (err) {
+			errorMessage =
+				err instanceof Error ? err.message : 'Failed to switch voice profile. Please try again.';
+			console.error('[Profile] Failed to switch profile:', err);
+		} finally {
+			isSwitchingProfile = false;
+		}
+	}
 
 	function loadConversationFromStorage() {
 		if (typeof window === 'undefined') return;
@@ -128,7 +214,16 @@
 
 <div class="home">
 	<h1>Voice Journal Therapy</h1>
-	<p class="profile-info">Profile: {selectedProfile.name}</p>
+
+	<div class="profile-section">
+		<ProfileDropdown
+			disabled={isSwitchingProfile || currentState !== 'idle'}
+			onProfileChange={handleProfileChange}
+		/>
+		{#if isSwitchingProfile}
+			<div class="profile-switching-indicator">Switching voice profile...</div>
+		{/if}
+	</div>
 
 	<RateLimitIndicator />
 
@@ -205,10 +300,31 @@
 		color: hsl(220, 20%, 85%);
 	}
 
-	.profile-info {
-		color: hsl(220, 20%, 50%);
+	.profile-section {
 		margin-bottom: 2rem;
-		font-size: 0.9rem;
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.profile-switching-indicator {
+		padding: 0.5rem 1rem;
+		background: hsl(220, 50%, 95%);
+		border: 1px solid hsl(220, 40%, 80%);
+		border-radius: 0.5rem;
+		color: hsl(220, 50%, 40%);
+		font-size: 0.85rem;
+		text-align: center;
+		animation: pulse 2s infinite;
+	}
+
+	.dark .profile-switching-indicator {
+		background: hsl(220, 30%, 25%);
+		border-color: hsl(220, 40%, 40%);
+		color: hsl(220, 50%, 70%);
 	}
 
 	.voice-controls {
