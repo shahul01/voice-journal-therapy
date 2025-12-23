@@ -32,6 +32,7 @@ export interface OrchestratorConfig {
 	onTranscriptUpdate: (state: ConversationState) => void;
 	onError: (error: Error) => void;
 	onStateChange: (state: 'idle' | 'listening' | 'processing' | 'speaking') => void;
+	onRecordingStateChange?: (isRecording: boolean) => void;
 	profile: Profile;
 }
 
@@ -42,22 +43,31 @@ export class ConversationOrchestrator {
 	private conversationState: ConversationState;
 	private isRecording = false;
 	private isProcessing = false;
+	private manualStop = false;
 	private audioChunks: Blob[] = [];
 	private currentState: 'idle' | 'listening' | 'processing' | 'speaking' = 'idle';
 	private speechEndTimeout: ReturnType<typeof setTimeout> | null = null;
 	private pendingRequestPromise: Promise<string> | null = null;
 
 	constructor(private config: OrchestratorConfig) {
+		console.log('[Orchestrator] Constructor called with profile:', {
+			name: config.profile.name,
+			id: config.profile.id,
+			voiceId: config.profile.config.voice_id
+		});
 		this.audioPlayback = new AudioPlayback();
 		this.conversationState = { messages: [], contextWindow: [] };
 	}
 
 	async start(): Promise<void> {
-		if (this.isRecording) return;
+		// Only skip if we're already actively capturing (not just if flag is set)
+		if (this.isRecording && this.audioCapture) return;
 
+		this.manualStop = false;
 		this.isRecording = true;
 		this.audioChunks = [];
 		this.updateState('listening');
+		this.config.onRecordingStateChange?.(true);
 
 		const captureConfig: AudioCaptureConfig = {
 			onDataAvailable: (blob) => {
@@ -103,7 +113,17 @@ export class ConversationOrchestrator {
 	}
 
 	stop(): void {
+		this.manualStop = true;
 		this.isRecording = false;
+		this.isProcessing = false;
+		this.config.onRecordingStateChange?.(false);
+
+		// Only stop audio playback if AI is not currently speaking
+		// This allows users to stop recording while still hearing the AI's response
+		const isAudioPlaying = this.audioPlayback.isCurrentlyPlaying();
+		if (!isAudioPlaying) {
+			this.audioPlayback.stop();
+		}
 
 		if (this.speechEndTimeout) {
 			clearTimeout(this.speechEndTimeout);
@@ -120,9 +140,13 @@ export class ConversationOrchestrator {
 			this.vad = null;
 		}
 
-		if (this.audioChunks.length > 0 && !this.isProcessing) {
-			this.processUserSpeech();
-		} else {
+		// When manually stopped, don't process pending chunks - just stop recording
+		this.audioChunks = [];
+		this.pendingRequestPromise = null;
+
+		// Only update state to 'idle' if audio is not playing
+		// If audio is playing, let it finish naturally (state will be 'speaking')
+		if (!isAudioPlaying) {
 			this.updateState('idle');
 		}
 	}
@@ -134,8 +158,10 @@ export class ConversationOrchestrator {
 		this.updateState('processing');
 
 		const wasRecording = this.isRecording;
+		// Temporarily stop capture during processing, but maintain recording intent
 		if (this.audioCapture) {
 			this.audioCapture.stop();
+			this.audioCapture = null;
 		}
 
 		try {
@@ -144,7 +170,7 @@ export class ConversationOrchestrator {
 
 			if (audioBlob.size < 100) {
 				this.isProcessing = false;
-				if (wasRecording) {
+				if (wasRecording && !this.manualStop) {
 					await this.start();
 				} else {
 					this.updateState('idle');
@@ -157,7 +183,7 @@ export class ConversationOrchestrator {
 			const transcribedText = await this.transcribeAudio(wavBlob);
 			if (!transcribedText.trim()) {
 				this.isProcessing = false;
-				if (wasRecording) {
+				if (wasRecording && !this.manualStop) {
 					await this.start();
 				} else {
 					this.updateState('idle');
@@ -171,7 +197,7 @@ export class ConversationOrchestrator {
 			const aiResponse = await this.getAIResponse();
 			if (!aiResponse.trim()) {
 				this.isProcessing = false;
-				if (wasRecording) {
+				if (wasRecording && !this.manualStop) {
 					await this.start();
 				} else {
 					this.updateState('idle');
@@ -186,7 +212,8 @@ export class ConversationOrchestrator {
 
 			this.isProcessing = false;
 
-			if (wasRecording && this.isRecording) {
+			// Auto-restart only if was recording and user didn't manually stop
+			if (wasRecording && !this.manualStop) {
 				await this.start();
 			} else {
 				this.updateState('idle');
@@ -196,7 +223,7 @@ export class ConversationOrchestrator {
 			const errorMessage = error instanceof Error ? error.message : 'Processing failed';
 			this.config.onError(new Error(errorMessage));
 
-			if (wasRecording && this.isRecording) {
+			if (wasRecording && !this.manualStop) {
 				try {
 					await this.start();
 				} catch (restartError) {
@@ -278,8 +305,34 @@ export class ConversationOrchestrator {
 		}
 	}
 
+	/**
+	 * Parses a percentage string (e.g., "50%") to a decimal (e.g., 0.5)
+	 */
+	private parsePercentage(value: string): number {
+		if (!value) return 0.5;
+		const cleaned = value.toString().replace('%', '').trim();
+		const parsed = parseFloat(cleaned);
+		if (isNaN(parsed)) return 0.5;
+		// If value is > 1, assume it's a percentage (50 = 0.5), otherwise use as-is
+		return parsed > 1 ? parsed / 100 : parsed;
+	}
+
 	private async speakResponse(text: string): Promise<void> {
 		this.updateState('speaking');
+
+		const voiceId = this.config.profile.config.voice_id;
+		const speed = parseFloat(this.config.profile.config.Speed) || 0.95;
+		const stability = this.parsePercentage(this.config.profile.config.Stability);
+		const similarityBoost = this.parsePercentage(this.config.profile.config['Similarity boost']);
+
+		console.log('[Orchestrator] TTS request:', {
+			profile: this.config.profile.name,
+			profileId: this.config.profile.id,
+			voiceId,
+			speed,
+			stability,
+			similarityBoost
+		});
 
 		let response: Response;
 		try {
@@ -290,11 +343,11 @@ export class ConversationOrchestrator {
 				},
 				body: JSON.stringify({
 					text,
-					voiceId: this.config.profile.config.voice_id,
+					voiceId,
 					modelId: 'eleven_flash_v2_5',
-					stability: 0.5,
-					similarityBoost: 0.75,
-					speed: parseFloat(this.config.profile.config.Speed) || 0.95
+					stability,
+					similarityBoost,
+					speed
 				})
 			});
 		} catch (err) {
@@ -314,9 +367,8 @@ export class ConversationOrchestrator {
 
 		return new Promise((resolve, reject) => {
 			this.audioPlayback.play(audioData, () => {
-				if (this.currentState === 'speaking') {
-					this.updateState('idle');
-				}
+				// Don't update state here - let processUserSpeech handle state transitions
+				// This prevents race conditions and ensures smooth flow
 				resolve();
 			});
 		});
@@ -340,6 +392,35 @@ export class ConversationOrchestrator {
 
 	getConversationState(): ConversationState {
 		return this.conversationState;
+	}
+
+	/**
+	 * Updates the profile without stopping current operations.
+	 * Audio playback and recording will continue uninterrupted.
+	 * The new profile will be used for the next TTS request.
+	 */
+	updateProfile(newProfile: Profile): void {
+		console.log('[Orchestrator] Updating profile:', {
+			oldProfile: this.config.profile.name,
+			newProfile: newProfile.name,
+			oldVoiceId: this.config.profile.config.voice_id,
+			newVoiceId: newProfile.config.voice_id
+		});
+		this.config.profile = newProfile;
+	}
+
+	/**
+	 * Checks if audio is currently playing.
+	 */
+	isAudioPlaying(): boolean {
+		return this.audioPlayback.isCurrentlyPlaying();
+	}
+
+	/**
+	 * Checks if recording is currently active.
+	 */
+	isRecordingActive(): boolean {
+		return this.isRecording && this.audioCapture !== null;
 	}
 
 	async processDemoAudio(audioUrl: string): Promise<void> {

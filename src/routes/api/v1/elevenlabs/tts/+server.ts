@@ -14,7 +14,18 @@ export const POST: RequestHandler = async ({ request }) => {
 			throw error(500, 'ElevenLabs API key not configured');
 		}
 
-		const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId || 'pjcYQlDFKMbcOUp6F5GD'}`, {
+		// Use provided voiceId or fallback to default
+		const finalVoiceId = voiceId || 'pjcYQlDFKMbcOUp6F5GD';
+
+		console.log('[TTS API] Request:', {
+			voiceId: finalVoiceId,
+			modelId: modelId || 'eleven_flash_v2_5',
+			stability: stability ?? 0.5,
+			similarityBoost: similarityBoost ?? 0.75,
+			speed: speed !== undefined ? speed : undefined
+		});
+
+		const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${finalVoiceId}`, {
 			method: 'POST',
 			headers: {
 				'xi-api-key': ELEVENLABS_API_KEY,
