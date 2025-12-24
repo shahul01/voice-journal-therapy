@@ -3,5 +3,5 @@
 		"*.css": "tailwindcss"
 	},
 	"workbench.colorTheme": "Purple Night",
-	"cSpell.words": ["elevenlabs", "ossp", "pgcrypto", "plpgsql"]
+	"cSpell.words": ["elevenlabs", "ossp", "Paraglide", "pgcrypto", "plpgsql"]
 }
