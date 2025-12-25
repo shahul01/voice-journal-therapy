@@ -1,22 +1,18 @@
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_PUBLISHABLE_KEY } from '$env/static/public';
-import { createServerClient } from '@supabase/ssr';
+import { supabaseServerClientBasic } from '$lib/supabase/server';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import type { Handle } from '@sveltejs/kit';
 
+/**
+ * Auth middleware: Refreshes expired auth tokens automatically.
+ * This ensures seamless session management without requiring user re-authentication.
+ */
 export const handle: Handle = async ({ event, resolve }) => {
-	event.locals.supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_PUBLISHABLE_KEY, {
-		cookies: {
-			getAll() {
-				return event.cookies.getAll();
-			},
-			setAll(cookiesToSet) {
-				cookiesToSet.forEach(({ name, value, options }) =>
-					event.cookies.set(name, value, { ...options, path: '/' })
-				);
-			}
-		}
-	});
+	event.locals.supabase = supabaseServerClientBasic(event);
 
+	/**
+	 * Safely get session by validating JWT signature.
+	 * Never trust getSession() alone on server - always validate with getUser().
+	 */
 	event.locals.safeGetSession = async () => {
 		const {
 			data: { session }
@@ -25,6 +21,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			return { session: null, user: null };
 		}
 
+		// Validate JWT signature against project's public keys
 		const {
 			data: { user },
 			error
@@ -35,6 +32,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		return { session, user };
 	};
+
+	// Refresh session if needed (handles token refresh automatically)
+	const {
+		data: { session }
+	} = await event.locals.supabase.auth.getSession();
+
+	// If session exists, ensure it's refreshed
+	if (session) {
+		await event.locals.supabase.auth.getUser();
+	}
 
 	const withParaglideMiddleware = paraglideMiddleware(event.request, ({ request, locale }) => {
 		event.request = request;
@@ -48,4 +55,4 @@ export const handle: Handle = async ({ event, resolve }) => {
 	});
 
 	return withParaglideMiddleware;
-};
+};;
