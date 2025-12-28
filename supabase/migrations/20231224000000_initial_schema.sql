@@ -280,6 +280,7 @@ CREATE TABLE IF NOT EXISTS public.crisis_events (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 	severity TEXT NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+	-- summary of what caused it TEXT
 	trigger_source TEXT NOT NULL, -- 'conversation', 'journal', 'assessment', 'manual'
 	conversation_id UUID REFERENCES public.conversations(id) ON DELETE SET NULL,
 	message_id UUID REFERENCES public.messages(id) ON DELETE SET NULL,
