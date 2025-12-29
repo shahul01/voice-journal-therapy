@@ -19,6 +19,7 @@
 		<div class="nav-links">
 			{#if isAuthenticated}
 				<a href="/app">App</a>
+				<a href="/app/profile/contacts">Emergency Contacts</a>
 				<form method="post" action="/auth/signout" class="signout-form">
 					<button type="submit" class="signout-button">Sign Out</button>
 				</form>
