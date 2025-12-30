@@ -5,6 +5,7 @@
 	import { ConversationOrchestrator } from '$lib/utils/conversation/orchestrator';
 	import RateLimitIndicator from '$lib/components/RateLimitIndicator.svelte';
 	import ProfileDropdown from '$lib/components/ProfileDropdown.svelte';
+	import { openCrisisModal } from '$lib/stores/crisisModal';
 	import type { ConversationState } from '$lib/types/conversation';
 	import type { Profile } from '$lib/types/profile';
 
@@ -217,16 +218,23 @@
 	<h1>Voice Journal Therapy</h1>
 
 	<div class="profile-section">
-		<ProfileDropdown
-			disabled={isSwitchingProfile}
-			onProfileChange={handleProfileChange}
-		/>
+		<ProfileDropdown disabled={isSwitchingProfile} onProfileChange={handleProfileChange} />
 		{#if isSwitchingProfile}
 			<div class="profile-switching-indicator">Switching voice profile...</div>
 		{/if}
 	</div>
 
 	<RateLimitIndicator />
+
+	<button
+		type="button"
+		class="crisis-button"
+		onclick={openCrisisModal}
+		aria-label="Open crisis hotlines and support resources"
+	>
+		<span class="crisis-icon">🆘</span>
+		<span class="crisis-text">Crisis Help</span>
+	</button>
 
 	<div class="voice-controls">
 		<div class="state-indicator" style="color: {getStateColor()}">
@@ -326,6 +334,72 @@
 		background: hsl(220, 30%, 25%);
 		border-color: hsl(220, 40%, 40%);
 		color: hsl(220, 50%, 70%);
+	}
+
+	.crisis-button {
+		position: fixed;
+		bottom: 2rem;
+		right: 2rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 1rem 1.5rem;
+		background: linear-gradient(135deg, hsl(0, 70%, 55%), hsl(0, 80%, 50%));
+		color: white;
+		border: none;
+		border-radius: 2rem;
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+		transition: all 0.3s ease;
+		z-index: 1000;
+		animation: pulse-glow 2s infinite;
+	}
+
+	.crisis-button:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+		background: linear-gradient(135deg, hsl(0, 70%, 50%), hsl(0, 80%, 45%));
+	}
+
+	.crisis-button:active {
+		transform: translateY(0);
+	}
+
+	.crisis-icon {
+		font-size: 1.3rem;
+	}
+
+	.crisis-text {
+		white-space: nowrap;
+	}
+
+	@keyframes pulse-glow {
+		0%,
+		100% {
+			box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+		}
+		50% {
+			box-shadow: 0 4px 20px rgba(220, 50%, 50%, 0.5);
+		}
+	}
+
+	@media (max-width: 640px) {
+		.crisis-button {
+			bottom: 1rem;
+			right: 1rem;
+			padding: 0.75rem 1.25rem;
+			font-size: 0.9rem;
+		}
+
+		.crisis-text {
+			display: none;
+		}
+
+		.crisis-icon {
+			font-size: 1.5rem;
+		}
 	}
 
 	.voice-controls {
