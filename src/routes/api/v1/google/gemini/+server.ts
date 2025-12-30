@@ -87,7 +87,14 @@ export const POST: RequestHandler = async ({ request }) => {
 				topK: 40,
 				topP: 0.95,
 				maxOutputTokens: 1024
-			}
+			},
+			// Allow open discussion of self-harm / suicidal thoughts for therapy use case
+			safetySettings: [
+				{
+					category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+					threshold: 'BLOCK_NONE'
+				}
+			]
 		};
 
 		const modelName = 'gemini-2.5-flash';
