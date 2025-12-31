@@ -63,16 +63,38 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
-	// Verify crisis event exists and belongs to user
-	const { data: crisisEvent, error: crisisError } = await locals.supabase
+	// Check if crisis event exists in database
+	const { data: existingEvent } = await locals.supabase
 		.from('crisis_events')
 		.select('id, user_id, severity')
 		.eq('id', body.crisis_event_id)
-		.eq('user_id', user.id)
 		.single();
 
-	if (crisisError || !crisisEvent) {
-		throw error(404, 'Crisis event not found');
+	if (!existingEvent) {
+		// Crisis event doesn't exist - create it (manual alert trigger)
+		const { error: insertError } = await locals.supabase.from('crisis_events').insert({
+			id: body.crisis_event_id,
+			user_id: user.id,
+			severity: body.severity,
+			cause_summary: 'Manual alert triggered by user',
+			trigger_source: 'manual_alert',
+			detection_details: {
+				source: 'emergency_contact_modal',
+				timestamp: new Date().toISOString()
+			},
+			solution_provided: null,
+			follow_up_required: false
+		});
+
+		if (insertError) {
+			console.error('[SendAlerts API] Failed to create crisis event:', insertError);
+			throw error(500, 'Failed to create crisis event record');
+		}
+	} else {
+		// Crisis event exists - verify it belongs to this user
+		if (existingEvent.user_id !== user.id) {
+			throw error(403, 'Unauthorized access to crisis event');
+		}
 	}
 
 	// Get user profile for name

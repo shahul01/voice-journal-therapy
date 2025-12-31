@@ -63,7 +63,7 @@ export async function sendEmailAlert({
 			body: JSON.stringify({
 				from: 'VoiceGuard <alerts@voice-therapy.shahul01.com>',
 				to: [to],
-				subject: 'VoiceGuard Support Network Alert',
+				subject: 'URGENT: VoiceGuard Support Network Alert',
 				text: alertMessage
 			})
 		});

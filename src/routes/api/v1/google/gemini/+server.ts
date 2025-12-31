@@ -1,9 +1,10 @@
 import { GOOGLE_GEMINI_API_KEY } from '$env/static/private';
 import { error, json } from '@sveltejs/kit';
+import { prompts } from '$lib/data';
 import type { RequestHandler } from './$types';
 
 // Compressed system prompt to reduce token usage
-const THERAPIST_SYSTEM_PROMPT = `Empathetic voice therapy assistant. Listen actively, respond naturally with warmth and understanding. Guide self-reflection gently. Keep responses concise for speech. Be supportive, not clinical.`;
+const THERAPIST_SYSTEM_PROMPT = prompts.v0.therapy[0].prompt;
 
 interface RateLimitError {
 	status: number;
@@ -92,6 +93,18 @@ export const POST: RequestHandler = async ({ request }) => {
 			safetySettings: [
 				{
 					category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+					threshold: 'BLOCK_NONE'
+				},
+				{
+					category: 'HARM_CATEGORY_HARASSMENT',
+					threshold: 'BLOCK_NONE'
+				},
+				{
+					category: 'HARM_CATEGORY_HATE_SPEECH',
+					threshold: 'BLOCK_NONE'
+				},
+				{
+					category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
 					threshold: 'BLOCK_NONE'
 				}
 			]

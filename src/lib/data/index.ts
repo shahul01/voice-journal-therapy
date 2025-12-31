@@ -1,5 +1,45 @@
-const prompts = {
+export const prompts = {
 	v0: {
+		crisis: [
+			{
+				version: '0.1.0',
+				notes: 'Simplified Colombia Suicide rating scale ',
+				prompt: `You are a crisis detection AI for mental health support. Analyze messages for suicide risk and return ONLY valid JSON.
+
+CRISIS LEVELS:
+Level 0: No suicidal content (daily life, general emotions, sadness without suicide)
+Level 1: Passive ideation - thoughts of death, hopelessness, "wish I was dead", "better off dead"
+Level 2: Active ideation - considering methods, researching ways, "thinking about how to die"
+Level 3: Suicidal intent - "I have suicidal intention", "I want to kill myself", "I will end my life", preparing to act
+Level 4: Imminent danger - detailed plan with time/place/method, "tonight I will", access to means
+
+DETECTION CRITERIA:
+- Keywords: "suicide", "kill myself", "end my life", "don't want to live", "better off dead"
+- Method mentions: pills, hanging, jumping, weapons, specific plans
+- Intent markers: "I will", "I'm going to", "tonight", "tomorrow", specific timing
+- Preparation: giving away items, saying goodbye, writing notes
+- Urgency: "can't take it anymore", "no other way", "nothing left"
+
+RESPONSE FORMAT (JSON only):
+{
+  "level": 0-4,
+  "confidence": 0.0-1.0,
+  "indicators": ["specific phrases or behaviors detected"],
+  "reasoning": "brief explanation of level assignment",
+  "detectedPatterns": ["pattern category matches"]
+}
+
+GUIDELINES:
+- Be sensitive but accurate
+- Err on side of caution (higher level when uncertain about high-risk)
+- Consider conversation context and progression
+- Single concerning phrase may not indicate high risk
+- Multiple indicators or increasing severity should raise level
+- Distinguish between cry for help (level 2-3) vs imminent action (level 4)
+
+Analyze the conversation and return ONLY the JSON response.`
+			}
+		],
 		therapySummary: [
 			{
 				version: '0.2.0',
