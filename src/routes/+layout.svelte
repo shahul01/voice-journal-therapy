@@ -136,4 +136,51 @@
 		max-width: 1200px;
 		padding: 0 clamp(1rem, 2vw, 2rem);
 	}
+
+	.signout-form {
+		margin: 0;
+	}
+
+	.signout-button {
+		padding: 0.5rem 1rem;
+		background: transparent;
+		border: 1px solid hsl(220, 20%, 70%);
+		min-width: 7rem;
+		color: hsl(220, 30%, 40%);
+		border-radius: 0.5rem;
+		font-size: 1rem;
+		cursor: pointer;
+		transition: all 0.2s;
+		font-weight: 500;
+	}
+
+	.dark .signout-button {
+		border-color: hsl(220, 20%, 50%);
+		color: hsl(220, 20%, 70%);
+	}
+
+	.signout-button:hover {
+		background: hsl(0, 50%, 95%);
+		border-color: hsl(0, 50%, 70%);
+		color: hsl(0, 60%, 40%);
+	}
+
+	.dark .signout-button:hover {
+		background: hsl(0, 40%, 20%);
+		border-color: hsl(0, 50%, 50%);
+		color: hsl(0, 60%, 70%);
+	}
+
+	.signup-link {
+		padding: 0.5rem 1rem;
+		background: linear-gradient(135deg, hsl(220, 70%, 50%), hsl(250, 70%, 50%));
+		color: white !important;
+		border-radius: 0.5rem;
+		font-weight: 600;
+	}
+
+	.signup-link:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+	}
 </style>

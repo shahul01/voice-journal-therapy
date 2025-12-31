@@ -177,7 +177,7 @@
 		margin: 0 0 0.5rem 0;
 		font-size: 2rem;
 		font-weight: 600;
-		color: hsl(220, 30%, 20%);
+		color: hsl(220, 30%, 60%);
 	}
 
 	.dark .page-header h1 {
@@ -186,7 +186,7 @@
 
 	.description {
 		margin: 0;
-		color: hsl(220, 20%, 50%);
+		color: hsl(220, 20%, 70%);
 		line-height: 1.6;
 		font-size: 1rem;
 	}

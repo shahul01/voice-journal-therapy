@@ -91,7 +91,9 @@
 		text-decoration: none;
 		border-radius: 0.5rem;
 		font-weight: 600;
-		transition: transform 0.2s, box-shadow 0.2s;
+		transition:
+			transform 0.2s,
+			box-shadow 0.2s;
 	}
 
 	.button:hover {
@@ -99,4 +101,3 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 	}
 </style>
-
