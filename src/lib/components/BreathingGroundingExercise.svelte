@@ -234,7 +234,7 @@
 			{#if exerciseStep === 'breathing'}
 				<div class="exercise-section">
 					<p class="intro-text">
-						I'm here with you. Let me guide you through a calming breathing exercise using my voice.
+						I'm here with you. Let me guide you through a calming breathing exercise using my voice to help you relax.
 					</p>
 
 					{#if !isVoiceGuidanceActive}

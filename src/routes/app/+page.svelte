@@ -150,7 +150,11 @@
 			initialState: conversationState
 		});
 
-		console.log('[App] Orchestrator created successfully with', conversationState.messages.length, 'existing messages');
+		console.log(
+			'[App] Orchestrator created successfully with',
+			conversationState.messages.length,
+			'existing messages'
+		);
 	}
 
 	/**
@@ -382,6 +386,17 @@
 		}
 	}
 
+	async function stopAISpeaking() {
+		if (!orchestrator) return;
+
+		try {
+			errorMessage = null;
+			await orchestrator.stopAISpeaking(true);
+		} catch (err) {
+			errorMessage = err instanceof Error ? err.message : 'Failed to stop AI';
+		}
+	}
+
 	async function sendDemoAudio() {
 		if (!orchestrator || currentState === 'processing') return;
 
@@ -567,6 +582,13 @@
 					Send Now
 				</button>
 			{/if}
+
+			{#if currentState === 'speaking'}
+				<button class="stop-ai-button" onclick={stopAISpeaking}>
+					<span class="button-icon">✋</span>
+					Stop AI & Talk
+				</button>
+			{/if}
 		</div>
 
 		<!-- <button
@@ -602,6 +624,11 @@
 				{/each}
 			{/if}
 		</div>
+	</div>
+	<div class="ai-disclaimer">
+		<strong>Important:</strong> VoiceGuard AI is
+		<span aria-label="artificial intelligence">AI</span>-powered and is not a replacement for
+		professional mental therapy.
 	</div>
 </div>
 
@@ -833,6 +860,45 @@
 		}
 		50% {
 			transform: scale(1.02);
+		}
+	}
+
+	.stop-ai-button {
+		padding: 1rem 1.5rem;
+		font-size: 1rem;
+		font-weight: 600;
+		border: none;
+		border-radius: 2rem;
+		background: linear-gradient(135deg, hsl(30, 80%, 50%), hsl(15, 80%, 50%));
+		color: white;
+		cursor: pointer;
+		transition: all 0.3s ease;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		animation: pulse-attention 1.5s infinite;
+	}
+
+	.stop-ai-button:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+		background: linear-gradient(135deg, hsl(30, 80%, 45%), hsl(15, 80%, 45%));
+	}
+
+	.stop-ai-button:active {
+		transform: translateY(0);
+	}
+
+	@keyframes pulse-attention {
+		0%,
+		100% {
+			transform: scale(1);
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+		}
+		50% {
+			transform: scale(1.03);
+			box-shadow: 0 4px 16px rgba(255, 140, 0, 0.4);
 		}
 	}
 
@@ -1262,11 +1328,34 @@
 		}
 
 		.record-button,
-		.send-now-button {
+		.send-now-button,
+		.stop-ai-button {
 			width: 100%;
 			justify-content: center;
 			padding: 0.875rem 1.5rem;
 			font-size: 1rem;
 		}
+	}
+	.ai-disclaimer {
+		background: hsl(40, 100%, 97%);
+		border: 1px solid hsl(35, 85%, 85%);
+		color: hsl(30, 70%, 45%);
+		font-size: 0.97rem;
+		border-radius: 0.75rem;
+		padding: 1em 1.1em;
+		margin: 1.5em 0 0.8em 0;
+		box-shadow: 0 2px 8px 0 hsl(30 60% 80% / 18%);
+	}
+	.dark .ai-disclaimer {
+		background: hsl(30, 25%, 20%);
+		border: 1px solid hsl(30, 15%, 30%);
+		color: hsl(37, 90%, 82%);
+	}
+	.crisis-hotline-link {
+		color: hsl(10, 70%, 46%);
+		text-decoration: underline;
+	}
+	.dark .crisis-hotline-link {
+		color: hsl(10, 85%, 60%);
 	}
 </style>
