@@ -2,12 +2,15 @@
 	import { onMount } from 'svelte';
 	import { crisisModalOpen, closeCrisisModal } from '$lib/stores/crisisModal';
 	import { getPrimaryHotlines, detectUserCountry, type CrisisHotline } from '$lib/data/crisisHotlines';
+	import { createFocusTrap } from '$lib/utils/focusTrap';
 	import { browser } from '$app/environment';
 
 	let isOpen = $state(false);
 	let hotlines = $state<CrisisHotline[]>([]);
 	let userCountry = $state<string>('US');
 	let copiedNumber = $state<string | null>(null);
+	let modalElement: HTMLElement | null = null;
+	let cleanupFocusTrap: (() => void) | null = null;
 
 	onMount(() => {
 		if (browser) {
@@ -21,8 +24,21 @@
 			if (open) {
 				// Prevent body scroll when modal is open
 				document.body.style.overflow = 'hidden';
+
+				// Setup focus trap
+				if (modalElement) {
+					cleanupFocusTrap = createFocusTrap(modalElement, {
+						onEscape: handleClose
+					});
+				}
 			} else {
 				document.body.style.overflow = '';
+
+				// Cleanup focus trap
+				if (cleanupFocusTrap) {
+					cleanupFocusTrap();
+					cleanupFocusTrap = null;
+				}
 			}
 		});
 
@@ -91,7 +107,7 @@
 		role="presentation"
 		aria-hidden="true"
 	></div>
-	<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+	<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" bind:this={modalElement}>
 		<div class="modal-header">
 			<h2 id="modal-title">You're Not Alone - Immediate Help Available</h2>
 			<button

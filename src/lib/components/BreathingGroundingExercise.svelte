@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { selectedProfile } from '$lib/stores/profile';
-	import { BREATHING_GUIDANCE, GROUNDING_GUIDANCE, LEVEL_2_SUPPORT, type GuidanceStep } from '$lib/utils/crisis/breathingScripts';
+	import {
+		BREATHING_GUIDANCE,
+		GROUNDING_GUIDANCE,
+		LEVEL_2_SUPPORT,
+		type GuidanceStep
+	} from '$lib/utils/crisis/breathingScripts';
+	import { createFocusTrap } from '$lib/utils/focusTrap';
 	import type { Profile } from '$lib/types/profile';
 
 	interface Props {
@@ -21,6 +27,8 @@
 	let errorMessage = $state<string | null>(null);
 	let audioElement: HTMLAudioElement | null = null;
 	let stepTimeout: ReturnType<typeof setTimeout> | null = null;
+	let modalElement: HTMLElement | null = null;
+	let cleanupFocusTrap: (() => void) | null = null;
 
 	/**
 	 * Parse percentage string to decimal for voice settings
@@ -140,7 +148,7 @@
 			await playAudio(audioBuffer);
 
 			// Wait for step duration after audio finishes
-			await new Promise(resolve => {
+			await new Promise((resolve) => {
 				stepTimeout = setTimeout(resolve, step.duration);
 			});
 		}
@@ -200,8 +208,21 @@
 			currentStepIndex = 0;
 			isVoiceGuidanceActive = false;
 			errorMessage = null;
+
+			// Setup focus trap
+			if (modalElement) {
+				cleanupFocusTrap = createFocusTrap(modalElement, {
+					onEscape: handleClose
+				});
+			}
 		} else {
 			stopVoiceGuidance();
+
+			// Cleanup focus trap
+			if (cleanupFocusTrap) {
+				cleanupFocusTrap();
+				cleanupFocusTrap = null;
+			}
 		}
 	});
 </script>
@@ -215,7 +236,13 @@
 		tabindex="0"
 		aria-label="Close modal backdrop"
 	></div>
-	<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+	<div
+		class="modal"
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="modal-title"
+		bind:this={modalElement}
+	>
 		<div class="modal-header">
 			<h2 id="modal-title">Let's Take a Moment Together</h2>
 			<button type="button" class="close-button" onclick={handleClose} aria-label="Close modal">
@@ -234,7 +261,8 @@
 			{#if exerciseStep === 'breathing'}
 				<div class="exercise-section">
 					<p class="intro-text">
-						I'm here with you. Let me guide you through a calming breathing exercise using my voice to help you relax.
+						I'm here with you. Let me guide you through a calming breathing exercise using my voice
+						to help you relax.
 					</p>
 
 					{#if !isVoiceGuidanceActive}

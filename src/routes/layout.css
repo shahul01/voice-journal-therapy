@@ -134,3 +134,76 @@ button {
 	border-color: hsl(0, 50%, 50%);
 	color: hsl(0, 60%, 70%);
 }
+
+/* ==========================================
+   ACCESSIBILITY FEATURES (WCAG 2.1 Level AA)
+   ========================================== */
+
+/* Screen reader only content - hides visually but keeps for screen readers */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border-width: 0;
+}
+
+/* Focus visible indicators for keyboard navigation */
+*:focus-visible {
+	outline: 3px solid hsl(220, 70%, 50%);
+	outline-offset: 2px;
+	transition: outline 0.2s ease;
+}
+
+.dark *:focus-visible {
+	outline-color: hsl(220, 70%, 60%);
+}
+
+/* Enhanced focus for interactive elements */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+	outline: 3px solid hsl(220, 70%, 50%);
+	outline-offset: 2px;
+	box-shadow: 0 0 0 3px hsla(220, 70%, 50%, 0.2);
+}
+
+.dark button:focus-visible,
+.dark a:focus-visible,
+.dark input:focus-visible,
+.dark textarea:focus-visible,
+.dark select:focus-visible {
+	outline-color: hsl(220, 70%, 60%);
+	box-shadow: 0 0 0 3px hsla(220, 70%, 60%, 0.2);
+}
+
+/* High contrast focus for critical actions (crisis button, etc.) */
+.crisis-button:focus-visible {
+	outline: 4px solid hsl(45, 100%, 50%);
+	outline-offset: 3px;
+	box-shadow: 0 0 0 6px hsla(45, 100%, 50%, 0.3);
+}
+
+/* Remove default focus styles when focus-visible is available */
+*:focus:not(:focus-visible) {
+	outline: none;
+}
+
+/* Ensure sufficient color contrast for text */
+@media (prefers-contrast: high) {
+	body {
+		background: white;
+		color: black;
+	}
+
+	.dark body {
+		background: black;
+		color: white;
+	}
+}

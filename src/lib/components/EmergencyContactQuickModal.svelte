@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { createFocusTrap } from '$lib/utils/focusTrap';
 	import type { EmergencyContact } from '$lib/types/emergency';
 
 	interface Props {
@@ -14,10 +15,27 @@
 	let isSendingAlerts = $state(false);
 	let errorMessage = $state<string | null>(null);
 	let successMessage = $state<string | null>(null);
+	let modalElement: HTMLElement | null = null;
+	let cleanupFocusTrap: (() => void) | null = null;
 
 	$effect(() => {
 		if (isOpen) {
 			loadContacts();
+
+			// Setup focus trap
+			if (modalElement) {
+				cleanupFocusTrap = createFocusTrap(modalElement, {
+					onEscape: () => {
+						if (!isSendingAlerts) handleClose();
+					}
+				});
+			}
+		} else {
+			// Cleanup focus trap
+			if (cleanupFocusTrap) {
+				cleanupFocusTrap();
+				cleanupFocusTrap = null;
+			}
 		}
 	});
 
@@ -113,7 +131,7 @@
 		tabindex="-1"
 		aria-label="Close modal"
 	></div>
-	<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+	<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" bind:this={modalElement}>
 		<div class="modal-header">
 			<h2 id="modal-title">Reach Out to Your Support Network</h2>
 			<button

@@ -480,7 +480,7 @@
 						aria-label="Edit conversation name"
 						title="Edit conversation name"
 					>
-						✏️
+						✏️ Edit
 					</button>
 				{/if}
 			</div>
@@ -558,6 +558,11 @@
 	</button>
 
 	<div class="voice-controls">
+		<!-- Live region for screen reader announcements -->
+		<div class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+			{getStateLabel()}
+		</div>
+
 		<div class="state-indicator" style="color: {getStateColor()}">
 			<span class="state-dot"></span>
 			<span class="state-text">{getStateLabel()}</span>
@@ -609,7 +614,7 @@
 		</button> -->
 
 		{#if errorMessage}
-			<div class="error-message">{errorMessage}</div>
+			<div class="error-message" role="alert" aria-live="assertive">{errorMessage}</div>
 		{/if}
 	</div>
 
@@ -1149,6 +1154,7 @@
 
 	.edit-name-button {
 		padding: 0.5rem 0.75rem;
+		color: hsl(0, 0%, 7%);
 		background: hsl(220, 20%, 97%);
 		border: 1px solid hsl(220, 20%, 85%);
 		border-radius: 0.5rem;
@@ -1304,6 +1310,42 @@
 	.delete-conversation-button:hover {
 		opacity: 1;
 		transform: scale(1.2);
+	}
+
+	/* Accessibility: Screen reader only content */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border-width: 0;
+	}
+
+	/* Accessibility: Focus visible indicators */
+	*:focus-visible {
+		outline: 3px solid hsl(220, 70%, 50%);
+		outline-offset: 2px;
+		border-radius: 0.25rem;
+	}
+
+	.dark *:focus-visible {
+		outline-color: hsl(220, 70%, 60%);
+	}
+
+	/* Ensure buttons have clear focus states */
+	button:focus-visible,
+	a:focus-visible {
+		outline: 3px solid hsl(220, 70%, 50%);
+		outline-offset: 2px;
+	}
+
+	.dark button:focus-visible,
+	.dark a:focus-visible {
+		outline-color: hsl(220, 70%, 60%);
 	}
 
 	@media (max-width: 640px) {
