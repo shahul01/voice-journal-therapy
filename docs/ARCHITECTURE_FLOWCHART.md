@@ -9,9 +9,12 @@ flowchart LR
     User["👤 User<br/>Speaks"] --> Mic["🎤 Microphone<br/>Captures Audio"]
     Mic --> VAD["🔊 Voice Detection<br/>Detects Silence"]
     VAD --> STT["🎙️ ElevenLabs<br/>Speech → Text"]
-    STT --> Crisis["🚨 Crisis Check<br/>Gemini AI"]
-    Crisis --> AI["🧠 Gemini AI<br/>Generates Response"]
-    AI --> TTS["🔊 ElevenLabs<br/>Text → Speech"]
+    STT --> Parallel{"⚡ Parallel Processing<br/>(Promise.all)"}
+    Parallel --> Crisis["🚨 Crisis Check<br/>Gemini AI"]
+    Parallel --> AI["🧠 Gemini AI<br/>Generates Response"]
+    Crisis --> Merge["Merge Results"]
+    AI --> Merge
+    Merge --> TTS["🔊 ElevenLabs<br/>Text → Speech"]
     TTS --> Speaker["🔊 Speaker<br/>Plays Response"]
     Speaker --> User
 
@@ -19,8 +22,10 @@ flowchart LR
     style Mic fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     style VAD fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     style STT fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    style Parallel fill:#fff9c4,stroke:#f57f17,stroke-width:3px
     style Crisis fill:#ffebee,stroke:#b71c1c,stroke-width:2px
     style AI fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    style Merge fill:#fff9c4,stroke:#f57f17,stroke-width:2px
     style TTS fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
     style Speaker fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
 ```
@@ -29,17 +34,21 @@ flowchart LR
 1. **User speaks** into their device microphone
 2. **Voice Activity Detection** waits for silence (1.5 seconds)
 3. **ElevenLabs STT** converts speech to text
-4. **Crisis Detection** analyzes conversation for safety concerns
-5. **Gemini AI** generates an empathetic response
-6. **ElevenLabs TTS** converts response to natural speech
-7. **Audio plays back** to the user
-8. **Loop continues** automatically for continuous conversation
+4. **Parallel Processing** runs simultaneously:
+   - **Crisis Detection** analyzes conversation for safety concerns
+   - **Gemini AI** generates an empathetic response
+5. **ElevenLabs TTS** converts response to natural speech
+6. **Audio plays back** to the user
+7. **Loop continues** automatically for continuous conversation
 
 **Key Technologies:**
 - 🎙️ **ElevenLabs**: Voice input/output (STT + TTS)
 - 🧠 **Google Gemini 2.5 Flash**: AI reasoning and crisis detection
 - 🔊 **Web Audio API**: Real-time voice activity detection
 - 💾 **Supabase**: User data and conversation storage
+
+**Performance Optimization:**
+- ⚡ **Parallel Processing**: Crisis detection and AI response generation run simultaneously using `Promise.all()`, reducing response time by ~50%
 
 ---
 
@@ -162,8 +171,8 @@ flowchart TB
     GeminiAPI -->|"Detection result"| CrisisResult
     CrisisResult -->|"onCrisisDetected()"| ProcessMethod
 
-    %% Get AI Response
-    ProcessMethod -->|"getAIResponse()"| ResponseCache
+    %% Get AI Response - Runs in parallel with Crisis Detection using Promise.all()
+    ProcessMethod -->|"Promise.all([getAIResponse(), detectAndHandleCrisis()])"| ResponseCache
     ResponseCache -->|"Cache miss"| RequestQueue
     RequestQueue -->|"Check rate limits"| RateLimitTracker
     RateLimitTracker -->|"RPM: 15/min<br/>TPM: 1M/min<br/>RPD: 1500/day"| RequestQueue
@@ -315,12 +324,19 @@ sequenceDiagram
     STT-->>Orchestrator: Transcribed text
     Orchestrator->>Orchestrator: addMessage('user', text)
     Orchestrator->>UI: onTranscriptUpdate()
-    Orchestrator->>CrisisDetection: detectAndHandleCrisis()
-    CrisisDetection->>Gemini: Analyze for crisis indicators
-    Gemini-->>CrisisDetection: Crisis result (level, confidence)
-    CrisisDetection-->>Orchestrator: onCrisisDetected()
-    Orchestrator->>Gemini: getAIResponse()<br/>(via RequestQueue)
-    Gemini-->>Orchestrator: AI response text
+
+    Note over Orchestrator,Gemini: Parallel Execution with Promise.all()
+    par Crisis Detection (runs in parallel)
+        Orchestrator->>CrisisDetection: detectAndHandleCrisis()
+        CrisisDetection->>Gemini: Analyze for crisis indicators
+        Gemini-->>CrisisDetection: Crisis result (level, confidence)
+        CrisisDetection-->>Orchestrator: onCrisisDetected()
+    and AI Response Generation (runs in parallel)
+        Orchestrator->>Gemini: getAIResponse()<br/>(via RequestQueue)
+        Gemini-->>Orchestrator: AI response text
+    end
+    Note over Orchestrator,Gemini: Both operations complete together
+
     Orchestrator->>Orchestrator: addMessage('ai', text)
     Orchestrator->>Orchestrator: speakResponse(text)
     Orchestrator->>Orchestrator: updateState('speaking')

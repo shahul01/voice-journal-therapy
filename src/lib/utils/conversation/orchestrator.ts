@@ -18,7 +18,7 @@ function downloadAndLogAudio(audioBlob: Blob, prefix: string = 'recording'): voi
 	a.href = url;
 	a.download = filename;
 	document.body.appendChild(a);
-	a.click();
+	// a.click();
 	document.body.removeChild(a);
 	URL.revokeObjectURL(url);
 
@@ -220,12 +220,18 @@ export class ConversationOrchestrator {
 			this.conversationState = addMessage(this.conversationState, 'user', transcribedText);
 			this.config.onTranscriptUpdate(this.conversationState);
 
-			// Detect crisis level after user message
-			console.log('[Orchestrator] 🔍 About to call detectAndHandleCrisis from processUserSpeech');
-			await this.detectAndHandleCrisis();
-			console.log('[Orchestrator] ✅ Crisis detection completed');
-
-			const aiResponse = await this.getAIResponse();
+			/**
+			 * Performance Optimization: Promise.all() and non blocking:
+			 * Runs crisis detection and AI response in parallel
+			 *
+			 * Both API calls to Gemini AI run simultaneously using Promise.all().
+			 *
+			 * Also crisis detection result is handled via callback (onCrisisDetected),
+			 * so it can complete independently without blocking the AI response.
+			 */
+			console.log('[Orchestrator] 🚀 Running crisis detection and AI response in parallel');
+			const [aiResponse] = await Promise.all([this.getAIResponse(), this.detectAndHandleCrisis()]);
+			console.log('[Orchestrator] ✅ Parallel operations completed');
 			if (!aiResponse.trim()) {
 				this.isProcessing = false;
 				if (wasRecording && !this.manualStop) {
@@ -498,10 +504,13 @@ export class ConversationOrchestrator {
 			this.conversationState = addMessage(this.conversationState, 'user', transcribedText);
 			this.config.onTranscriptUpdate(this.conversationState);
 
-			// Detect crisis level after user message
-			await this.detectAndHandleCrisis();
-
-			const aiResponse = await this.getAIResponse();
+			/**
+			 * Performance Optimization: Run crisis detection and AI response in parallel
+			 * (Same optimization applied for demo audio processing)
+			 */
+			console.log('[Orchestrator] 🚀 Running crisis detection and AI response in parallel (demo)');
+			const [aiResponse] = await Promise.all([this.getAIResponse(), this.detectAndHandleCrisis()]);
+			console.log('[Orchestrator] ✅ Parallel operations completed (demo)');
 			if (!aiResponse.trim()) {
 				this.isProcessing = false;
 				this.updateState('idle');

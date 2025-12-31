@@ -73,7 +73,7 @@
 
 <div class="contact-list">
 	<div class="list-header">
-		<h3>Emergency Contacts</h3>
+		<h3>Emergency Contacts List</h3>
 		<button type="button" class="add-button" onclick={handleAdd} aria-label="Add new emergency contact">
 			+ Add Contact
 		</button>
@@ -169,7 +169,7 @@
 		margin: 0;
 		font-size: 1.5rem;
 		font-weight: 600;
-		color: hsl(220, 30%, 20%);
+		color: hsl(220, 30%, 60%);
 	}
 
 	.dark .list-header h3 {
