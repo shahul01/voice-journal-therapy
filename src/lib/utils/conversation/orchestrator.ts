@@ -36,6 +36,7 @@ export interface OrchestratorConfig {
 	onRecordingStateChange?: (isRecording: boolean) => void;
 	onCrisisDetected?: (result: CrisisDetectionResult) => void;
 	profile: Profile;
+	initialState?: ConversationState;
 }
 
 export class ConversationOrchestrator {
@@ -57,10 +58,12 @@ export class ConversationOrchestrator {
 		console.log('[Orchestrator] Constructor called with profile:', {
 			name: config.profile.name,
 			id: config.profile.id,
-			voiceId: config.profile.config.voice_id
+			voiceId: config.profile.config.voice_id,
+			hasInitialState: !!config.initialState,
+			messageCount: config.initialState?.messages.length || 0
 		});
 		this.audioPlayback = new AudioPlayback();
-		this.conversationState = { messages: [], contextWindow: [] };
+		this.conversationState = config.initialState || { messages: [], contextWindow: [] };
 	}
 
 	async start(): Promise<void> {

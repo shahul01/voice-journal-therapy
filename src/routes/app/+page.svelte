@@ -32,7 +32,7 @@
 	let breathingModalState = $state($breathingExerciseModal);
 	let emergencyContactModalOpen = $state(false);
 	let showConversationList = $state(false);
-
+	let currentConversationId: string | null = null;
 	let orchestrator: ConversationOrchestrator | null = null;
 	let unsubscribeProfile: (() => void) | null = null;
 	let unsubscribeBreathingModal: (() => void) | null = null;
@@ -49,6 +49,7 @@
 		const active = get(activeConversation);
 		if (active) {
 			conversationState = active.state;
+			currentConversationId = active.id;
 		}
 
 		// Log initial profile
@@ -73,10 +74,23 @@
 		// Subscribe to active conversation changes
 		unsubscribeActiveConversation = activeConversation.subscribe((conv) => {
 			if (conv) {
+				// Only reinitialize if switching to a DIFFERENT conversation
+				const isNewConversation = conv.id !== currentConversationId;
+
+				console.log('[App] Active conversation changed:', {
+					newId: conv.id,
+					oldId: currentConversationId,
+					isNewConversation,
+					messageCount: conv.state.messages.length
+				});
+
 				conversationState = conv.state;
-				// Reinitialize orchestrator with new conversation state
-				if (orchestrator) {
-					orchestrator.stop();
+				currentConversationId = conv.id;
+
+				// Only reinitialize orchestrator when switching conversations, not on state updates
+				if (isNewConversation && orchestrator) {
+					console.log('[App] Switching conversation - reinitializing orchestrator');
+					orchestrator?.stop();
 					initializeOrchestrator();
 				}
 			}
@@ -85,7 +99,7 @@
 
 	onDestroy(() => {
 		if (orchestrator) {
-			orchestrator.stop();
+			orchestrator?.stop();
 		}
 		if (unsubscribeProfile) {
 			unsubscribeProfile();
@@ -105,9 +119,9 @@
 			name: profileToUse.name,
 			id: profileToUse.id,
 			voiceId: profileToUse.config.voice_id,
-			wasPassed: profile !== undefined
+			wasPassed: profile !== undefined,
+			currentMessageCount: conversationState.messages.length
 		});
-
 		if (orchestrator) {
 			console.log('[App] Stopping existing orchestrator');
 			orchestrator.stop();
@@ -130,10 +144,11 @@
 				isListening = isRecording;
 			},
 			onCrisisDetected: handleCrisisDetected,
-			profile: profileToUse
+			profile: profileToUse,
+			initialState: conversationState
 		});
 
-		console.log('[App] Orchestrator created successfully');
+		console.log('[App] Orchestrator created successfully with', conversationState.messages.length, 'existing messages');
 	}
 
 	/**
