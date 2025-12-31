@@ -55,7 +55,14 @@
 </script>
 
 {#if isOpen}
-	<div class="modal-backdrop" onclick={() => { if (!isSending) onCancel(); }} onkeydown={handleKeydown}></div>
+	<div
+		class="modal-backdrop"
+		onclick={() => { if (!isSending) onCancel(); }}
+		onkeydown={handleKeydown}
+		role="button"
+		tabindex="-1"
+		aria-label="Close modal"
+	></div>
 	<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
 		<div class="modal-header">
 			<h2 id="modal-title">Confirm Support Network Alert</h2>
@@ -105,6 +112,7 @@
 				class="cancel-button"
 				onclick={onCancel}
 				disabled={isSending}
+				aria-label="Cancel alert and close confirmation"
 			>
 				Cancel
 			</button>
@@ -113,6 +121,7 @@
 				class="confirm-button"
 				onclick={handleConfirm}
 				disabled={isSending}
+				aria-label="Confirm and send alert to emergency contacts"
 			>
 				{isSending ? 'Sending...' : 'Send Alert'}
 			</button>

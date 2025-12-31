@@ -74,7 +74,7 @@
 <div class="contact-list">
 	<div class="list-header">
 		<h3>Emergency Contacts</h3>
-		<button type="button" class="add-button" onclick={handleAdd}>
+		<button type="button" class="add-button" onclick={handleAdd} aria-label="Add new emergency contact">
 			+ Add Contact
 		</button>
 	</div>
@@ -126,6 +126,7 @@
 							class="edit-button"
 							onclick={() => handleEdit(contact)}
 							disabled={isDeleting === contact.id}
+							aria-label="Edit contact {contact.name}"
 						>
 							Edit
 						</button>
@@ -134,6 +135,7 @@
 							class="delete-button"
 							onclick={() => handleDelete(contact.id)}
 							disabled={isDeleting === contact.id}
+							aria-label="Delete contact {contact.name}"
 						>
 							{isDeleting === contact.id ? 'Deleting...' : 'Delete'}
 						</button>

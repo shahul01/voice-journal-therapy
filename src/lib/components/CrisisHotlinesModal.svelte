@@ -219,7 +219,12 @@
 		</div>
 
 		<div class="modal-footer">
-			<button type="button" class="close-footer-button" onclick={handleClose}>
+			<button
+				type="button"
+				class="close-footer-button"
+				onclick={handleClose}
+				aria-label="I'm safe, close crisis hotlines modal"
+			>
 				I'm Safe - Close
 			</button>
 		</div>

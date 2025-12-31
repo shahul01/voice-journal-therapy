@@ -239,7 +239,7 @@
 
 					{#if !isVoiceGuidanceActive}
 						<div class="voice-guidance-info">
-							<div class="info-icon">🎙️</div>
+							<div class="info-icon" aria-hidden="true">🎙️</div>
 							<h3>Voice-Guided Breathing & Grounding</h3>
 							<p class="info-description">
 								I'll guide you through breathing exercises and grounding techniques with my voice.
@@ -253,8 +253,13 @@
 							</ul>
 						</div>
 
-						<button type="button" class="primary-button large" onclick={startVoiceGuidedBreathing}>
-							<span class="button-icon">▶️</span>
+						<button
+							type="button"
+							class="primary-button large"
+							onclick={startVoiceGuidedBreathing}
+							aria-label="Start voice-guided breathing and grounding session"
+						>
+							<span class="button-icon" aria-hidden="true">▶️</span>
 							Start Voice-Guided Session
 						</button>
 					{:else}
@@ -286,13 +291,18 @@
 					{#if isVoiceGuidanceActive}
 						<div class="voice-active-display">
 							<div class="grounding-visualizer">
-								<div class="grounding-icon">🧘</div>
+								<div class="grounding-icon" aria-hidden="true">🧘</div>
 								<p class="grounding-text">Continue listening to my voice...</p>
 							</div>
 						</div>
 
-						<button type="button" class="secondary-button" onclick={stopVoiceGuidance}>
-							<span class="button-icon">⏸️</span>
+						<button
+							type="button"
+							class="secondary-button"
+							onclick={stopVoiceGuidance}
+							aria-label="Pause voice guidance"
+						>
+							<span class="button-icon" aria-hidden="true">⏸️</span>
 							Pause
 						</button>
 					{:else}
@@ -322,10 +332,18 @@
 							type="button"
 							class="secondary-button"
 							onclick={() => (exerciseStep = 'breathing')}
+							aria-label="Practice breathing exercises again"
 						>
 							Practice Again
 						</button>
-						<button type="button" class="primary-button" onclick={handleClose}> Continue </button>
+						<button
+							type="button"
+							class="primary-button"
+							onclick={handleClose}
+							aria-label="Continue and close breathing exercise"
+						>
+							Continue
+						</button>
 					</div>
 				</div>
 			{/if}

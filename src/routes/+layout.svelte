@@ -34,19 +34,19 @@
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 
-<nav class="main-nav">
+<nav class="main-nav" aria-label="Main navigation">
 	<div class="nav-content">
-		<a href="/" class="logo">VoiceGuard AI</a>
+		<a href="/" class="logo" aria-label="VoiceGuard AI home">VoiceGuard AI</a>
 		<div class="nav-links">
 			{#if isAuthenticated}
-				<a href="/app">App</a>
-				<a href="/app/profile/contacts">Emergency Contacts</a>
+				<a href="/app" aria-label="Go to voice journal therapy app">App</a>
+				<a href="/app/profile/contacts" aria-label="Manage emergency contacts">Emergency Contacts</a>
 				<form method="post" action="/auth/signout" class="signout-form">
-					<button type="submit" class="signout-button">Sign Out</button>
+					<button type="submit" class="signout-button" aria-label="Sign out of your account">Sign Out</button>
 				</form>
 			{:else}
-				<a href="/auth/signin">Sign In</a>
-				<a href="/auth/signup" class="signup-link">Sign Up</a>
+				<a href="/auth/signin" aria-label="Sign in to your account">Sign In</a>
+				<a href="/auth/signup" class="signup-link" aria-label="Create a new account">Sign Up</a>
 			{/if}
 		</div>
 	</div>

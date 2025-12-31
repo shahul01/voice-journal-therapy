@@ -461,6 +461,7 @@
 							placeholder="Enter conversation name"
 							autofocus
 							onclick={(e) => e.stopPropagation()}
+							aria-label="Edit conversation name"
 						/>
 					{:else if $activeConversation}
 						<span class="conversation-title">{$activeConversation.title}</span>
@@ -509,6 +510,7 @@
 							role="button"
 							tabindex="0"
 							onkeydown={(e) => e.key === 'Enter' && switchConversation(conv.id)}
+							aria-label="Switch to conversation {conv.title}"
 						>
 							<div class="conversation-item-content">
 								<div class="conversation-item-title">{conv.title}</div>
@@ -566,26 +568,32 @@
 				class="record-button"
 				onclick={toggleListening}
 				disabled={currentState === 'processing'}
+				aria-label={isListening ? 'Stop recording voice input' : 'Start recording voice input'}
 			>
 				{#if isListening}
-					<span class="button-icon">⏹</span>
+					<span class="button-icon" aria-hidden="true">⏹</span>
 					Stop Recording
 				{:else}
-					<span class="button-icon">🎤</span>
+					<span class="button-icon" aria-hidden="true">🎤</span>
 					Start Recording
 				{/if}
 			</button>
 
 			{#if isListening}
-				<button class="send-now-button" onclick={sendNow} disabled={currentState === 'processing'}>
-					<span class="button-icon">📤</span>
+				<button
+					class="send-now-button"
+					onclick={sendNow}
+					disabled={currentState === 'processing'}
+					aria-label="Send recording now and get AI response"
+				>
+					<span class="button-icon" aria-hidden="true">📤</span>
 					Send Now
 				</button>
 			{/if}
 
 			{#if currentState === 'speaking'}
-				<button class="stop-ai-button" onclick={stopAISpeaking}>
-					<span class="button-icon">✋</span>
+				<button class="stop-ai-button" onclick={stopAISpeaking} aria-label="Stop AI speaking and start talking">
+					<span class="button-icon" aria-hidden="true">✋</span>
 					Stop AI & Talk
 				</button>
 			{/if}

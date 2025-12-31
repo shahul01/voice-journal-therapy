@@ -118,7 +118,14 @@
 </script>
 
 {#if isOpen}
-	<div class="modal-backdrop" onclick={onClose} onkeydown={handleKeydown}></div>
+	<div
+		class="modal-backdrop"
+		onclick={onClose}
+		onkeydown={handleKeydown}
+		role="button"
+		tabindex="-1"
+		aria-label="Close modal"
+	></div>
 	<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
 		<div class="modal-header">
 			<h2 id="modal-title">{contact ? 'Edit Emergency Contact' : 'Add Emergency Contact'}</h2>
@@ -221,10 +228,21 @@
 				</div>
 
 				<div class="form-actions">
-					<button type="button" class="cancel-button" onclick={onClose} disabled={isSubmitting}>
+					<button
+						type="button"
+						class="cancel-button"
+						onclick={onClose}
+						disabled={isSubmitting}
+						aria-label="Cancel and close form"
+					>
 						Cancel
 					</button>
-					<button type="submit" class="submit-button" disabled={isSubmitting}>
+					<button
+						type="submit"
+						class="submit-button"
+						disabled={isSubmitting}
+						aria-label={contact ? 'Update emergency contact' : 'Add new emergency contact'}
+					>
 						{isSubmitting ? 'Saving...' : contact ? 'Update' : 'Add Contact'}
 					</button>
 				</div>
