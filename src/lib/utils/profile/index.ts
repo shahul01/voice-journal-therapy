@@ -25,13 +25,28 @@ const profiles: Profile[] = [
 			voice_id: 'onwK4e9ZLuTAKqWW03F9',
 			name: 'Daniel - Soothing and Calming',
 			Model: 'Eleven Flash v2.5',
-			Speed: '0.94',
+			Speed: '0.93',
 			Stability: '45%',
 			'Similarity boost': '76%',
 			Style: '0%',
 			'Speaker boost': 'Enabled'
 		},
 		description: 'A soothing voice to relax to.'
+	},
+	{
+		id: '3',
+		name: 'Empathetic 1',
+		config: {
+			voice_id: 'g6xIsTj2HwM6VR4iXFCw',
+			name: 'Jessica Anne Bogart - Empathetic and expressive',
+			Model: 'Eleven Flash v2.5',
+			Speed: '0.94',
+			Stability: '45%',
+			'Similarity boost': '76%',
+			Style: '0%',
+			'Speaker boost': 'Enabled'
+		},
+		description: 'Empathetic and expressive, great as a wellness coach.'
 	}
 ];
 
