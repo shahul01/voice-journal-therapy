@@ -5,6 +5,7 @@ import { convertToWav } from '$lib/utils/audio/wav-converter';
 import { addMessage, getContextForGemini } from './index';
 import type { ConversationState } from '$lib/types/conversation';
 import type { Profile } from '$lib/types/profile';
+import type { CrisisDetectionResult } from '$lib/types/crisis';
 
 function downloadAndLogAudio(audioBlob: Blob, prefix: string = 'recording'): void {
 	if (typeof window === 'undefined') return;
@@ -33,6 +34,7 @@ export interface OrchestratorConfig {
 	onError: (error: Error) => void;
 	onStateChange: (state: 'idle' | 'listening' | 'processing' | 'speaking') => void;
 	onRecordingStateChange?: (isRecording: boolean) => void;
+	onCrisisDetected?: (result: CrisisDetectionResult) => void;
 	profile: Profile;
 }
 
@@ -48,6 +50,8 @@ export class ConversationOrchestrator {
 	private currentState: 'idle' | 'listening' | 'processing' | 'speaking' = 'idle';
 	private speechEndTimeout: ReturnType<typeof setTimeout> | null = null;
 	private pendingRequestPromise: Promise<string> | null = null;
+	// private recordingStartTime: number = 0;
+	// private readonly MIN_RECORDING_DURATION = 800; // Minimum 800ms recording
 
 	constructor(private config: OrchestratorConfig) {
 		console.log('[Orchestrator] Constructor called with profile:', {
@@ -66,6 +70,7 @@ export class ConversationOrchestrator {
 		this.manualStop = false;
 		this.isRecording = true;
 		this.audioChunks = [];
+		// this.recordingStartTime = Date.now();
 		this.updateState('listening');
 		this.config.onRecordingStateChange?.(true);
 
@@ -90,8 +95,8 @@ export class ConversationOrchestrator {
 
 	private setupVAD(stream: MediaStream): void {
 		this.vad = new VoiceActivityDetector({
-			threshold: 30,
-			silenceDuration: 1500,
+			threshold: 50, // Slightly higher to reduce false silence detection
+			silenceDuration: 3_000, // 3 seconds allows natural pauses in speech
 			onSpeechStart: () => {
 				if (this.currentState === 'speaking') {
 					this.interruptAI();
@@ -151,6 +156,38 @@ export class ConversationOrchestrator {
 		}
 	}
 
+	/**
+	 * Send recorded audio immediately for processing
+	 * Useful for manual triggering without waiting for VAD
+	 */
+	async sendNow(): Promise<void> {
+		if (!this.isRecording || this.isProcessing || this.audioChunks.length === 0) {
+			return;
+		}
+
+		// Stop recording
+		this.isRecording = false;
+		this.config.onRecordingStateChange?.(false);
+
+		if (this.speechEndTimeout) {
+			clearTimeout(this.speechEndTimeout);
+			this.speechEndTimeout = null;
+		}
+
+		if (this.audioCapture) {
+			this.audioCapture.stop();
+			this.audioCapture = null;
+		}
+
+		if (this.vad) {
+			this.vad.stop();
+			this.vad = null;
+		}
+
+		// Process the recorded audio
+		await this.processUserSpeech();
+	}
+
 	private async processUserSpeech(): Promise<void> {
 		if (this.isProcessing || this.audioChunks.length === 0) return;
 
@@ -193,6 +230,11 @@ export class ConversationOrchestrator {
 
 			this.conversationState = addMessage(this.conversationState, 'user', transcribedText);
 			this.config.onTranscriptUpdate(this.conversationState);
+
+			// Detect crisis level after user message
+			console.log('[Orchestrator] 🔍 About to call detectAndHandleCrisis from processUserSpeech');
+			await this.detectAndHandleCrisis();
+			console.log('[Orchestrator] ✅ Crisis detection completed');
 
 			const aiResponse = await this.getAIResponse();
 			if (!aiResponse.trim()) {
@@ -448,6 +490,9 @@ export class ConversationOrchestrator {
 			this.conversationState = addMessage(this.conversationState, 'user', transcribedText);
 			this.config.onTranscriptUpdate(this.conversationState);
 
+			// Detect crisis level after user message
+			await this.detectAndHandleCrisis();
+
 			const aiResponse = await this.getAIResponse();
 			if (!aiResponse.trim()) {
 				this.isProcessing = false;
@@ -467,6 +512,69 @@ export class ConversationOrchestrator {
 			const errorMessage = error instanceof Error ? error.message : 'Processing demo audio failed';
 			this.config.onError(new Error(errorMessage));
 			this.updateState('idle');
+		}
+	}
+
+	/**
+	 * Detects crisis level from current conversation and notifies callback
+	 */
+	private async detectAndHandleCrisis(): Promise<void> {
+		console.log('[Orchestrator] 🔍 detectAndHandleCrisis CALLED');
+		console.log('[Orchestrator] Messages count:', this.conversationState.messages.length);
+		console.log('[Orchestrator] Latest messages:', this.conversationState.messages.slice(-3));
+
+		try {
+			// Only analyze if we have messages
+			if (this.conversationState.messages.length === 0) {
+				console.log('[Orchestrator] ⚠️ No messages to analyze');
+				return;
+			}
+
+			console.log('[Orchestrator] 📡 Sending request to /api/v1/crisis/detect...');
+
+			const response = await fetch('/api/v1/crisis/detect', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					messages: this.conversationState.messages
+				})
+			});
+
+			console.log('[Orchestrator] API response status:', response.status);
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				console.error('[Orchestrator] ❌ Crisis detection API failed:', response.status, errorText);
+				return;
+			}
+
+			const result = await response.json();
+			console.log('[Orchestrator] 📦 Raw API result:', result);
+
+			const detectionResult: CrisisDetectionResult = result.data;
+
+			console.log('[Orchestrator] ⚠️ CRISIS LEVEL DETECTED:', detectionResult.level);
+			console.log('[Orchestrator] Crisis details:', {
+				level: detectionResult.level,
+				confidence: detectionResult.confidence,
+				indicators: detectionResult.indicators,
+				reasoning: detectionResult.reasoning
+			});
+
+			// Notify callback if provided
+			if (this.config.onCrisisDetected) {
+				console.log('[Orchestrator] 🔔 Calling onCrisisDetected callback...');
+				this.config.onCrisisDetected(detectionResult);
+				console.log('[Orchestrator] ✅ Callback executed');
+			} else {
+				console.error('[Orchestrator] ❌ NO onCrisisDetected callback configured!');
+			}
+		} catch (err) {
+			console.error('[Orchestrator] ❌ Crisis detection error:', err);
+			console.error('[Orchestrator] Error stack:', err instanceof Error ? err.stack : 'No stack');
+			// Don't throw - crisis detection is non-critical for conversation flow
 		}
 	}
 }

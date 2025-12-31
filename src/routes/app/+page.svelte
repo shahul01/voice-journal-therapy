@@ -5,8 +5,18 @@
 	import { ConversationOrchestrator } from '$lib/utils/conversation/orchestrator';
 	import RateLimitIndicator from '$lib/components/RateLimitIndicator.svelte';
 	import ProfileDropdown from '$lib/components/ProfileDropdown.svelte';
+	import { openCrisisModal } from '$lib/stores/crisisModal';
+	import {
+		breathingExerciseModal,
+		openBreathingExerciseModal,
+		closeBreathingExerciseModal
+	} from '$lib/stores/breathingExerciseModal';
+	import { updateCrisisDetection } from '$lib/stores/crisisDetection';
+	import BreathingGroundingExercise from '$lib/components/BreathingGroundingExercise.svelte';
+	import EmergencyContactQuickModal from '$lib/components/EmergencyContactQuickModal.svelte';
 	import type { ConversationState } from '$lib/types/conversation';
 	import type { Profile } from '$lib/types/profile';
+	import type { CrisisDetectionResult } from '$lib/types/crisis';
 
 	let isListening = $state(false);
 	let conversationState = $state<ConversationState>({ messages: [], contextWindow: [] });
@@ -14,9 +24,12 @@
 	let currentState = $state<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
 	let errorMessage = $state<string | null>(null);
 	let isSwitchingProfile = $state(false);
+	let breathingModalState = $state($breathingExerciseModal);
+	let emergencyContactModalOpen = $state(false);
 
 	let orchestrator: ConversationOrchestrator | null = null;
 	let unsubscribeProfile: (() => void) | null = null;
+	let unsubscribeBreathingModal: (() => void) | null = null;
 
 	onMount(() => {
 		loadConversationFromStorage();
@@ -34,6 +47,11 @@
 		unsubscribeProfile = selectedProfile.subscribe((profile) => {
 			currentProfile = profile;
 		});
+
+		// Subscribe to breathing modal state
+		unsubscribeBreathingModal = breathingExerciseModal.subscribe((state) => {
+			breathingModalState = state;
+		});
 	});
 
 	onDestroy(() => {
@@ -42,6 +60,9 @@
 		}
 		if (unsubscribeProfile) {
 			unsubscribeProfile();
+		}
+		if (unsubscribeBreathingModal) {
+			unsubscribeBreathingModal();
 		}
 	});
 
@@ -76,10 +97,60 @@
 			onRecordingStateChange: (isRecording) => {
 				isListening = isRecording;
 			},
+			onCrisisDetected: handleCrisisDetected,
 			profile: profileToUse
 		});
 
 		console.log('[App] Orchestrator created successfully');
+	}
+
+	/**
+	 * Handle crisis detection result and trigger appropriate intervention
+	 */
+	function handleCrisisDetected(result: CrisisDetectionResult) {
+		console.log('🚨🚨🚨 [App] handleCrisisDetected CALLED 🚨🚨🚨');
+		console.log('[App] Crisis result:', JSON.stringify(result, null, 2));
+
+		// Update crisis detection store
+		updateCrisisDetection(result);
+
+		// Trigger appropriate intervention based on crisis level
+		switch (result.level) {
+			case 0:
+				// No intervention needed
+				console.log('[App] ✅ Level 0: No crisis detected, continuing normally');
+				break;
+
+			case 1:
+				// Offer breathing and grounding exercises
+				console.log('[App] 🧘 Level 1: Opening breathing/grounding modal');
+				openBreathingExerciseModal(1);
+				console.log('[App] Modal state:', $breathingExerciseModal);
+				break;
+
+			case 2:
+				// Proper conversation and/or breathing exercises
+				console.log('[App] 🧘 Level 2: Opening breathing/grounding modal with enhanced support');
+				openBreathingExerciseModal(2);
+				console.log('[App] Modal state:', $breathingExerciseModal);
+				break;
+
+			case 3:
+				// Show emergency contacts modal
+				console.log('[App] 👥 Level 3: Opening emergency contacts modal');
+				emergencyContactModalOpen = true;
+				console.log('[App] Emergency modal open:', emergencyContactModalOpen);
+				break;
+
+			case 4:
+				// Show crisis hotlines modal (critical)
+				console.log('[App] 🆘 Level 4 (CRITICAL): Opening crisis hotlines modal');
+				openCrisisModal();
+				break;
+
+			default:
+				console.warn('[App] ⚠️ Unknown crisis level:', result.level);
+		}
 	}
 
 	async function handleProfileChange(newProfile: Profile) {
@@ -173,6 +244,17 @@
 		}
 	}
 
+	async function sendNow() {
+		if (!orchestrator) return;
+
+		try {
+			errorMessage = null;
+			await orchestrator.sendNow();
+		} catch (err) {
+			errorMessage = err instanceof Error ? err.message : 'Failed to send recording';
+		}
+	}
+
 	async function sendDemoAudio() {
 		if (!orchestrator || currentState === 'processing') return;
 
@@ -217,10 +299,7 @@
 	<h1>Voice Journal Therapy</h1>
 
 	<div class="profile-section">
-		<ProfileDropdown
-			disabled={isSwitchingProfile}
-			onProfileChange={handleProfileChange}
-		/>
+		<ProfileDropdown disabled={isSwitchingProfile} onProfileChange={handleProfileChange} />
 		{#if isSwitchingProfile}
 			<div class="profile-switching-indicator">Switching voice profile...</div>
 		{/if}
@@ -228,25 +307,44 @@
 
 	<RateLimitIndicator />
 
+	<button
+		type="button"
+		class="crisis-button"
+		onclick={openCrisisModal}
+		aria-label="Open crisis hotlines and support resources"
+	>
+		<span class="crisis-icon">🆘</span>
+		<span class="crisis-text">Crisis Help</span>
+	</button>
+
 	<div class="voice-controls">
 		<div class="state-indicator" style="color: {getStateColor()}">
 			<span class="state-dot"></span>
 			<span class="state-text">{getStateLabel()}</span>
 		</div>
 
-		<button
-			class="record-button"
-			onclick={toggleListening}
-			disabled={currentState === 'processing'}
-		>
+		<div class="button-group">
+			<button
+				class="record-button"
+				onclick={toggleListening}
+				disabled={currentState === 'processing'}
+			>
+				{#if isListening}
+					<span class="button-icon">⏹</span>
+					Stop Recording
+				{:else}
+					<span class="button-icon">🎤</span>
+					Start Recording
+				{/if}
+			</button>
+
 			{#if isListening}
-				<span class="button-icon">⏹</span>
-				Stop Recording
-			{:else}
-				<span class="button-icon">🎤</span>
-				Start Recording
+				<button class="send-now-button" onclick={sendNow} disabled={currentState === 'processing'}>
+					<span class="button-icon">📤</span>
+					Send Now
+				</button>
 			{/if}
-		</button>
+		</div>
 
 		<!-- <button
 			class="demo-button"
@@ -283,6 +381,18 @@
 		</div>
 	</div>
 </div>
+
+<!-- Crisis Intervention Modals -->
+<BreathingGroundingExercise
+	isOpen={breathingModalState.isOpen}
+	crisisLevel={breathingModalState.crisisLevel || 1}
+	onClose={closeBreathingExerciseModal}
+/>
+
+<EmergencyContactQuickModal
+	isOpen={emergencyContactModalOpen}
+	onClose={() => (emergencyContactModalOpen = false)}
+/>
 
 <style lang="postcss">
 	.home {
@@ -328,6 +438,72 @@
 		color: hsl(220, 50%, 70%);
 	}
 
+	.crisis-button {
+		position: fixed;
+		bottom: 2rem;
+		right: 2rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 1rem 1.5rem;
+		background: linear-gradient(135deg, hsl(0, 70%, 55%), hsl(0, 80%, 50%));
+		color: white;
+		border: none;
+		border-radius: 2rem;
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+		transition: all 0.3s ease;
+		z-index: 1000;
+		animation: pulse-glow 2s infinite;
+	}
+
+	.crisis-button:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+		background: linear-gradient(135deg, hsl(0, 70%, 50%), hsl(0, 80%, 45%));
+	}
+
+	.crisis-button:active {
+		transform: translateY(0);
+	}
+
+	.crisis-icon {
+		font-size: 1.3rem;
+	}
+
+	.crisis-text {
+		white-space: nowrap;
+	}
+
+	@keyframes pulse-glow {
+		0%,
+		100% {
+			box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+		}
+		50% {
+			box-shadow: 0 4px 20px rgba(220, 50%, 50%, 0.5);
+		}
+	}
+
+	@media (max-width: 640px) {
+		.crisis-button {
+			bottom: 1rem;
+			right: 1rem;
+			padding: 0.75rem 1.25rem;
+			font-size: 0.9rem;
+		}
+
+		.crisis-text {
+			display: none;
+		}
+
+		.crisis-icon {
+			font-size: 1.5rem;
+		}
+	}
+
 	.voice-controls {
 		display: flex;
 		flex-direction: column;
@@ -365,6 +541,14 @@
 		}
 	}
 
+	.button-group {
+		display: flex;
+		gap: 1rem;
+		align-items: center;
+		flex-wrap: wrap;
+		justify-content: center;
+	}
+
 	.record-button {
 		padding: 1rem 2rem;
 		font-size: 1.1rem;
@@ -389,6 +573,44 @@
 	.record-button:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
+	}
+
+	.send-now-button {
+		padding: 1rem 1.5rem;
+		font-size: 1rem;
+		font-weight: 600;
+		border: none;
+		border-radius: 2rem;
+		background: linear-gradient(135deg, hsl(150, 60%, 45%), hsl(170, 60%, 45%));
+		color: white;
+		cursor: pointer;
+		transition: all 0.3s ease;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		animation: pulse-scale 2s infinite;
+	}
+
+	.send-now-button:hover:not(:disabled) {
+		transform: translateY(-2px);
+		box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+		background: linear-gradient(135deg, hsl(150, 60%, 40%), hsl(170, 60%, 40%));
+	}
+
+	.send-now-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	@keyframes pulse-scale {
+		0%,
+		100% {
+			transform: scale(1);
+		}
+		50% {
+			transform: scale(1.02);
+		}
 	}
 
 	.demo-button {
@@ -540,6 +762,20 @@
 		.message-user,
 		.message-ai {
 			max-width: 85%;
+		}
+
+		.button-group {
+			flex-direction: column;
+			width: 100%;
+			gap: 0.75rem;
+		}
+
+		.record-button,
+		.send-now-button {
+			width: 100%;
+			justify-content: center;
+			padding: 0.875rem 1.5rem;
+			font-size: 1rem;
 		}
 	}
 </style>
