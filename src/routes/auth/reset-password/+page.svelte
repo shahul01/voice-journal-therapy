@@ -50,7 +50,7 @@
 	h1 {
 		text-align: center;
 		margin-bottom: 1rem;
-		color: hsl(220, 30%, 20%);
+		color: hsl(220, 30%, 60%);
 	}
 
 	.dark h1 {
@@ -59,7 +59,7 @@
 
 	.description {
 		text-align: center;
-		color: hsl(220, 20%, 50%);
+		color: hsl(220, 20%, 70%);
 		margin-bottom: 2rem;
 		line-height: 1.6;
 	}

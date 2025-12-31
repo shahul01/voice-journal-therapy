@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { createFocusTrap } from '$lib/utils/focusTrap';
 	import type { EmergencyContact } from '$lib/types/emergency';
 
 	interface Props {
@@ -14,10 +15,27 @@
 	let isSendingAlerts = $state(false);
 	let errorMessage = $state<string | null>(null);
 	let successMessage = $state<string | null>(null);
+	let modalElement: HTMLElement | null = null;
+	let cleanupFocusTrap: (() => void) | null = null;
 
 	$effect(() => {
 		if (isOpen) {
 			loadContacts();
+
+			// Setup focus trap
+			if (modalElement) {
+				cleanupFocusTrap = createFocusTrap(modalElement, {
+					onEscape: () => {
+						if (!isSendingAlerts) handleClose();
+					}
+				});
+			}
+		} else {
+			// Cleanup focus trap
+			if (cleanupFocusTrap) {
+				cleanupFocusTrap();
+				cleanupFocusTrap = null;
+			}
 		}
 	});
 
@@ -109,8 +127,11 @@
 			if (!isSendingAlerts) handleClose();
 		}}
 		onkeydown={handleKeydown}
+		role="button"
+		tabindex="-1"
+		aria-label="Close modal"
 	></div>
-	<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+	<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" bind:this={modalElement}>
 		<div class="modal-header">
 			<h2 id="modal-title">Reach Out to Your Support Network</h2>
 			<button
@@ -139,8 +160,8 @@
 					<p class="no-contacts-text">
 						You haven't added any emergency contacts yet. Would you like to add them now?
 					</p>
-					<a href="/app/profile/contacts" class="add-contacts-link">
-						<span class="link-icon">➕</span>
+					<a href="/app/profile/contacts" class="add-contacts-link" aria-label="Go to emergency contacts page to add contacts">
+						<span class="link-icon" aria-hidden="true">➕</span>
 						<span class="link-text">Add Emergency Contacts</span>
 					</a>
 				</div>
@@ -185,12 +206,13 @@
 						class="send-alerts-button"
 						onclick={sendAlerts}
 						disabled={isSendingAlerts}
+						aria-label="Send alert to all emergency contacts"
 					>
 						{#if isSendingAlerts}
-							<span class="button-spinner"></span>
+							<span class="button-spinner" aria-hidden="true"></span>
 							Sending...
 						{:else}
-							<span class="button-icon">📨</span>
+							<span class="button-icon" aria-hidden="true">📨</span>
 							Notify My Support Network
 						{/if}
 					</button>
@@ -199,8 +221,8 @@
 
 			<div class="alternative-help">
 				<p class="alternative-text">Need immediate professional help?</p>
-				<a href="tel:988" class="crisis-link">
-					<span class="link-icon">📞</span>
+				<a href="tel:988" class="crisis-link" aria-label="Call 988 Suicide and Crisis Lifeline">
+					<span class="link-icon" aria-hidden="true">📞</span>
 					<span class="link-text">Call 988 - Suicide & Crisis Lifeline</span>
 				</a>
 			</div>
@@ -212,6 +234,7 @@
 				class="close-footer-button"
 				onclick={handleClose}
 				disabled={isSendingAlerts}
+				aria-label={successMessage ? 'Close emergency contact modal' : 'Not ready to contact support network'}
 			>
 				{successMessage ? 'Close' : 'Not Right Now'}
 			</button>

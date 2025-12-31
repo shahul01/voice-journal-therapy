@@ -7,6 +7,3 @@
 		<li><a href="/app">App</a></li>
 	</ul>
 </div>
-
-<style lang="postcss">
-</style>

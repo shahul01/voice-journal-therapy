@@ -73,7 +73,9 @@
 	h1 {
 		text-align: center;
 		margin-bottom: 2rem;
-		color: hsl(220, 30%, 20%);
+		color: hsl(220, 30%, 60%);
+		font-size: 2rem;
+		font-weight: 600;
 	}
 
 	.dark h1 {
@@ -131,7 +133,9 @@
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
-		transition: transform 0.2s, box-shadow 0.2s;
+		transition:
+			transform 0.2s,
+			box-shadow 0.2s;
 	}
 
 	.submit-button:hover:not(:disabled) {

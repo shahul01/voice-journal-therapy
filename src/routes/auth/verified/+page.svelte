@@ -70,7 +70,7 @@
 
 	h1 {
 		margin-bottom: 1rem;
-		color: hsl(220, 30%, 20%);
+		color: hsl(220, 30%, 60%);
 	}
 
 	.dark h1 {

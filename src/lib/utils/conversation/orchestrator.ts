@@ -99,7 +99,7 @@ export class ConversationOrchestrator {
 	private setupVAD(stream: MediaStream): void {
 		this.vad = new VoiceActivityDetector({
 			threshold: 50, // Slightly higher to reduce false silence detection
-			silenceDuration: 3_000, // 3 seconds allows natural pauses in speech
+			silenceDuration: 2_400, // 2 seconds user pause
 			onSpeechStart: () => {
 				if (this.currentState === 'speaking') {
 					this.interruptAI();
@@ -160,7 +160,7 @@ export class ConversationOrchestrator {
 	}
 
 	/**
-	 * Send recorded audio immediately for processing
+	 * Send recorded audio immediately for processing while continuing to record
 	 * Useful for manual triggering without waiting for VAD
 	 */
 	async sendNow(): Promise<void> {
@@ -168,26 +168,12 @@ export class ConversationOrchestrator {
 			return;
 		}
 
-		// Stop recording
-		this.isRecording = false;
-		this.config.onRecordingStateChange?.(false);
-
 		if (this.speechEndTimeout) {
 			clearTimeout(this.speechEndTimeout);
 			this.speechEndTimeout = null;
 		}
 
-		if (this.audioCapture) {
-			this.audioCapture.stop();
-			this.audioCapture = null;
-		}
-
-		if (this.vad) {
-			this.vad.stop();
-			this.vad = null;
-		}
-
-		// Process the recorded audio
+		// Process the recorded audio (this will handle recording state properly)
 		await this.processUserSpeech();
 	}
 
@@ -363,8 +349,7 @@ export class ConversationOrchestrator {
 	}
 
 	private async speakResponse(text: string): Promise<void> {
-		this.updateState('speaking');
-
+		// Keep state as 'processing' while generating TTS audio
 		const voiceId = this.config.profile.config.voice_id;
 		const speed = parseFloat(this.config.profile.config.Speed) || 0.95;
 		const stability = this.parsePercentage(this.config.profile.config.Stability);
@@ -410,6 +395,9 @@ export class ConversationOrchestrator {
 			throw new Error('Failed to read audio data from response');
 		});
 
+		// Now that we have the audio and are about to play it, update state to 'speaking'
+		this.updateState('speaking');
+
 		return new Promise((resolve, reject) => {
 			this.audioPlayback.play(audioData, () => {
 				// Don't update state here - let processUserSpeech handle state transitions
@@ -424,10 +412,27 @@ export class ConversationOrchestrator {
 		this.config.onStateChange(state);
 	}
 
+	/**
+	 * Interrupts AI speech playback and allows user to speak
+	 */
 	interruptAI(): void {
 		this.audioPlayback.stop();
 		if (this.currentState === 'speaking') {
 			this.updateState('idle');
+		}
+	}
+
+	/**
+	 * Stops AI speaking and optionally starts recording
+	 */
+	async stopAISpeaking(startRecording: boolean = false): Promise<void> {
+		this.audioPlayback.stop();
+		if (this.currentState === 'speaking') {
+			this.updateState('idle');
+		}
+
+		if (startRecording && !this.isRecording) {
+			await this.start();
 		}
 	}
 

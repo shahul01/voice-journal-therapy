@@ -150,7 +150,11 @@
 			initialState: conversationState
 		});
 
-		console.log('[App] Orchestrator created successfully with', conversationState.messages.length, 'existing messages');
+		console.log(
+			'[App] Orchestrator created successfully with',
+			conversationState.messages.length,
+			'existing messages'
+		);
 	}
 
 	/**
@@ -382,6 +386,17 @@
 		}
 	}
 
+	async function stopAISpeaking() {
+		if (!orchestrator) return;
+
+		try {
+			errorMessage = null;
+			await orchestrator.stopAISpeaking(true);
+		} catch (err) {
+			errorMessage = err instanceof Error ? err.message : 'Failed to stop AI';
+		}
+	}
+
 	async function sendDemoAudio() {
 		if (!orchestrator || currentState === 'processing') return;
 
@@ -446,6 +461,7 @@
 							placeholder="Enter conversation name"
 							autofocus
 							onclick={(e) => e.stopPropagation()}
+							aria-label="Edit conversation name"
 						/>
 					{:else if $activeConversation}
 						<span class="conversation-title">{$activeConversation.title}</span>
@@ -464,7 +480,7 @@
 						aria-label="Edit conversation name"
 						title="Edit conversation name"
 					>
-						✏️
+						✏️ Edit
 					</button>
 				{/if}
 			</div>
@@ -494,6 +510,7 @@
 							role="button"
 							tabindex="0"
 							onkeydown={(e) => e.key === 'Enter' && switchConversation(conv.id)}
+							aria-label="Switch to conversation {conv.title}"
 						>
 							<div class="conversation-item-content">
 								<div class="conversation-item-title">{conv.title}</div>
@@ -541,6 +558,11 @@
 	</button>
 
 	<div class="voice-controls">
+		<!-- Live region for screen reader announcements -->
+		<div class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+			{getStateLabel()}
+		</div>
+
 		<div class="state-indicator" style="color: {getStateColor()}">
 			<span class="state-dot"></span>
 			<span class="state-text">{getStateLabel()}</span>
@@ -551,20 +573,33 @@
 				class="record-button"
 				onclick={toggleListening}
 				disabled={currentState === 'processing'}
+				aria-label={isListening ? 'Stop recording voice input' : 'Start recording voice input'}
 			>
 				{#if isListening}
-					<span class="button-icon">⏹</span>
+					<span class="button-icon" aria-hidden="true">⏹</span>
 					Stop Recording
 				{:else}
-					<span class="button-icon">🎤</span>
+					<span class="button-icon" aria-hidden="true">🎤</span>
 					Start Recording
 				{/if}
 			</button>
 
 			{#if isListening}
-				<button class="send-now-button" onclick={sendNow} disabled={currentState === 'processing'}>
-					<span class="button-icon">📤</span>
+				<button
+					class="send-now-button"
+					onclick={sendNow}
+					disabled={currentState === 'processing'}
+					aria-label="Send recording now and get AI response"
+				>
+					<span class="button-icon" aria-hidden="true">📤</span>
 					Send Now
+				</button>
+			{/if}
+
+			{#if currentState === 'speaking'}
+				<button class="stop-ai-button" onclick={stopAISpeaking} aria-label="Stop AI speaking and start talking">
+					<span class="button-icon" aria-hidden="true">✋</span>
+					Stop AI & Talk
 				</button>
 			{/if}
 		</div>
@@ -579,7 +614,7 @@
 		</button> -->
 
 		{#if errorMessage}
-			<div class="error-message">{errorMessage}</div>
+			<div class="error-message" role="alert" aria-live="assertive">{errorMessage}</div>
 		{/if}
 	</div>
 
@@ -602,6 +637,11 @@
 				{/each}
 			{/if}
 		</div>
+	</div>
+	<div class="ai-disclaimer">
+		<strong>Important:</strong> VoiceGuard AI is
+		<span aria-label="artificial intelligence">AI</span>-powered and is not a replacement for
+		professional mental therapy.
 	</div>
 </div>
 
@@ -833,6 +873,45 @@
 		}
 		50% {
 			transform: scale(1.02);
+		}
+	}
+
+	.stop-ai-button {
+		padding: 1rem 1.5rem;
+		font-size: 1rem;
+		font-weight: 600;
+		border: none;
+		border-radius: 2rem;
+		background: linear-gradient(135deg, hsl(30, 80%, 50%), hsl(15, 80%, 50%));
+		color: white;
+		cursor: pointer;
+		transition: all 0.3s ease;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		animation: pulse-attention 1.5s infinite;
+	}
+
+	.stop-ai-button:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+		background: linear-gradient(135deg, hsl(30, 80%, 45%), hsl(15, 80%, 45%));
+	}
+
+	.stop-ai-button:active {
+		transform: translateY(0);
+	}
+
+	@keyframes pulse-attention {
+		0%,
+		100% {
+			transform: scale(1);
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+		}
+		50% {
+			transform: scale(1.03);
+			box-shadow: 0 4px 16px rgba(255, 140, 0, 0.4);
 		}
 	}
 
@@ -1075,6 +1154,7 @@
 
 	.edit-name-button {
 		padding: 0.5rem 0.75rem;
+		color: hsl(0, 0%, 7%);
 		background: hsl(220, 20%, 97%);
 		border: 1px solid hsl(220, 20%, 85%);
 		border-radius: 0.5rem;
@@ -1232,6 +1312,42 @@
 		transform: scale(1.2);
 	}
 
+	/* Accessibility: Screen reader only content */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border-width: 0;
+	}
+
+	/* Accessibility: Focus visible indicators */
+	*:focus-visible {
+		outline: 3px solid hsl(220, 70%, 50%);
+		outline-offset: 2px;
+		border-radius: 0.25rem;
+	}
+
+	.dark *:focus-visible {
+		outline-color: hsl(220, 70%, 60%);
+	}
+
+	/* Ensure buttons have clear focus states */
+	button:focus-visible,
+	a:focus-visible {
+		outline: 3px solid hsl(220, 70%, 50%);
+		outline-offset: 2px;
+	}
+
+	.dark button:focus-visible,
+	.dark a:focus-visible {
+		outline-color: hsl(220, 70%, 60%);
+	}
+
 	@media (max-width: 640px) {
 		.home {
 			padding: 1rem;
@@ -1262,11 +1378,34 @@
 		}
 
 		.record-button,
-		.send-now-button {
+		.send-now-button,
+		.stop-ai-button {
 			width: 100%;
 			justify-content: center;
 			padding: 0.875rem 1.5rem;
 			font-size: 1rem;
 		}
+	}
+	.ai-disclaimer {
+		background: hsl(40, 100%, 97%);
+		border: 1px solid hsl(35, 85%, 85%);
+		color: hsl(30, 70%, 45%);
+		font-size: 0.97rem;
+		border-radius: 0.75rem;
+		padding: 1em 1.1em;
+		margin: 1.5em 0 0.8em 0;
+		box-shadow: 0 2px 8px 0 hsl(30 60% 80% / 18%);
+	}
+	.dark .ai-disclaimer {
+		background: hsl(30, 25%, 20%);
+		border: 1px solid hsl(30, 15%, 30%);
+		color: hsl(37, 90%, 82%);
+	}
+	.crisis-hotline-link {
+		color: hsl(10, 70%, 46%);
+		text-decoration: underline;
+	}
+	.dark .crisis-hotline-link {
+		color: hsl(10, 85%, 60%);
 	}
 </style>

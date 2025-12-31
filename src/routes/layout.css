@@ -5,8 +5,6 @@ body {
 	@apply flex h-screen flex-col items-center justify-center;
 	@apply h-full w-full;
 
-	@apply p-4;
-
 	@apply bg-gray-100 dark:bg-gray-900;
 	@apply text-gray-900 dark:text-gray-100;
 
@@ -33,104 +31,109 @@ button {
 	@apply hover:shadow-xl;
 }
 
-.main-nav {
-	width: 100%;
-	background: hsl(220, 20%, 98%);
-	border-bottom: 1px solid hsl(220, 20%, 90%);
-	padding: 1rem 0;
-	margin-bottom: 2rem;
+a {
+	@apply text-blue-600 dark:text-blue-400;
+	@apply underline underline-offset-2;
+	@apply transition-colors;
+	@apply hover:text-blue-800 dark:hover:text-blue-200;
+	@apply focus:outline-none;
+	@apply focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2;
+	@apply rounded;
 }
 
-.dark .main-nav {
-	background: hsl(220, 15%, 12%);
-	border-bottom-color: hsl(220, 20%, 30%);
-}
-
-.nav-content {
-	max-width: 1200px;
-	margin: 0 auto;
-	padding: 0 2rem;
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-}
-
-.logo {
-	font-size: 1.5rem;
-	font-weight: 700;
-	color: hsl(220, 70%, 50%);
-	text-decoration: none;
-	transition: color 0.2s;
-}
-
-.logo:hover {
-	color: hsl(220, 70%, 40%);
-}
-
-.nav-links {
-	display: flex;
-	align-items: center;
-	gap: 1.5rem;
-}
-
-.nav-links a {
-	color: hsl(220, 30%, 40%);
-	text-decoration: none;
-	font-size: 1rem;
-	transition: color 0.2s;
-}
-
-.dark .nav-links a {
-	color: hsl(220, 20%, 70%);
-}
-
-.nav-links a:hover {
-	color: hsl(220, 70%, 50%);
-}
-
-.signup-link {
-	padding: 0.5rem 1rem;
-	background: linear-gradient(135deg, hsl(220, 70%, 50%), hsl(250, 70%, 50%));
-	color: white !important;
-	border-radius: 0.5rem;
+h1 {
+	font-size: 2rem;
 	font-weight: 600;
+	line-height: 1.2;
 }
 
-.signup-link:hover {
-	transform: translateY(-1px);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.signout-form {
-	margin: 0;
-}
-
-.signout-button {
-	padding: 0.5rem 1rem;
-	background: transparent;
-	border: 1px solid hsl(220, 20%, 70%);
-	min-width: 7rem;
-	color: hsl(220, 30%, 40%);
-	border-radius: 0.5rem;
-	font-size: 1rem;
-	cursor: pointer;
-	transition: all 0.2s;
+h2 {
+	font-size: 1.5rem;
 	font-weight: 500;
+	line-height: 1.2;
 }
 
-.dark .signout-button {
-	border-color: hsl(220, 20%, 50%);
-	color: hsl(220, 20%, 70%);
+h3 {
+	font-size: 1.25rem;
+	font-weight: 400;
+	line-height: 1.2;
 }
 
-.signout-button:hover {
-	background: hsl(0, 50%, 95%);
-	border-color: hsl(0, 50%, 70%);
-	color: hsl(0, 60%, 40%);
+p {
+	font-size: 1rem;
+	font-weight: 400;
+	line-height: 1.1;
 }
 
-.dark .signout-button:hover {
-	background: hsl(0, 40%, 20%);
-	border-color: hsl(0, 50%, 50%);
-	color: hsl(0, 60%, 70%);
+/* ==========================================
+   ACCESSIBILITY FEATURES (WCAG 2.1 Level AA)
+   ========================================== */
+
+/* Screen reader only content - hides visually but keeps for screen readers */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border-width: 0;
+}
+
+/* Focus visible indicators for keyboard navigation */
+*:focus-visible {
+	outline: 3px solid hsl(220, 70%, 50%);
+	outline-offset: 2px;
+	transition: outline 0.2s ease;
+}
+
+.dark *:focus-visible {
+	outline-color: hsl(220, 70%, 60%);
+}
+
+/* Enhanced focus for interactive elements */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+	outline: 3px solid hsl(220, 70%, 50%);
+	outline-offset: 2px;
+	box-shadow: 0 0 0 3px hsla(220, 70%, 50%, 0.2);
+}
+
+.dark button:focus-visible,
+.dark a:focus-visible,
+.dark input:focus-visible,
+.dark textarea:focus-visible,
+.dark select:focus-visible {
+	outline-color: hsl(220, 70%, 60%);
+	box-shadow: 0 0 0 3px hsla(220, 70%, 60%, 0.2);
+}
+
+/* High contrast focus for critical actions (crisis button, etc.) */
+.crisis-button:focus-visible {
+	outline: 4px solid hsl(45, 100%, 50%);
+	outline-offset: 3px;
+	box-shadow: 0 0 0 6px hsla(45, 100%, 50%, 0.3);
+}
+
+/* Remove default focus styles when focus-visible is available */
+*:focus:not(:focus-visible) {
+	outline: none;
+}
+
+/* Ensure sufficient color contrast for text */
+@media (prefers-contrast: high) {
+	body {
+		background: white;
+		color: black;
+	}
+
+	.dark body {
+		background: black;
+		color: white;
+	}
 }
