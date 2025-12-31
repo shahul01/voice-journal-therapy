@@ -87,7 +87,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				temperature: 0.7,
 				topK: 40,
 				topP: 0.95,
-				maxOutputTokens: 1024
+				maxOutputTokens: 8192 // Increased from 1024 to allow complete therapeutic responses
 			},
 			// Allow open discussion of self-harm / suicidal thoughts for therapy use case
 			safetySettings: [
@@ -112,117 +112,161 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const modelName = 'gemini-2.5-flash';
 		const maxRetries = 3;
+		const REQUEST_TIMEOUT = 30000; // 30 second timeout
 		let lastError: Error | null = null;
 
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
 			try {
 				if (stream) {
-					const response = await fetch(
-						`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${GOOGLE_GEMINI_API_KEY}`,
-						{
-							method: 'POST',
-							headers: {
-								'Content-Type': 'application/json'
-							},
-							body: JSON.stringify(requestBody)
-						}
-					);
+					// Create AbortController for timeout handling
+					const controller = new AbortController();
+					const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-					if (!response.ok) {
-						if (response.status === 429 && attempt < maxRetries) {
-							const errorData = await response.json().catch(() => ({}));
-							const rateLimitError = parseRateLimitError(response, errorData);
+					try {
+						const response = await fetch(
+							`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${GOOGLE_GEMINI_API_KEY}`,
+							{
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json'
+								},
+								body: JSON.stringify(requestBody),
+								signal: controller.signal
+							}
+						);
 
-							console.error('[Gemini API] Rate limit error (stream):', {
-								attempt: attempt + 1,
-								type: rateLimitError.type,
-								retryAfter: rateLimitError.retryAfter,
-								message: rateLimitError.message
-							});
+						clearTimeout(timeoutId);
 
-							const retryDelay = rateLimitError.retryAfter || Math.pow(2, attempt) * 1000;
-							await new Promise((resolve) => setTimeout(resolve, retryDelay));
-							continue;
-						}
+						if (!response.ok) {
+							if (response.status === 429 && attempt < maxRetries) {
+								const errorData = await response.json().catch(() => ({}));
+								const rateLimitError = parseRateLimitError(response, errorData);
 
-						const errorData = await response.json().catch(() => ({}));
-						if (response.status === 429) {
-							const rateLimitError = parseRateLimitError(response, errorData);
-							console.error('[Gemini API] Rate limit exceeded (stream):', rateLimitError);
-							throw error(
-								response.status,
-								JSON.stringify({
-									error: 'Rate limit exceeded',
+								console.error('[Gemini API] Rate limit error (stream):', {
+									attempt: attempt + 1,
 									type: rateLimitError.type,
 									retryAfter: rateLimitError.retryAfter,
 									message: rateLimitError.message
-								})
-							);
+								});
+
+								const retryDelay = rateLimitError.retryAfter || Math.pow(2, attempt) * 1000;
+								await new Promise((resolve) => setTimeout(resolve, retryDelay));
+								continue;
+							}
+
+							const errorData = await response.json().catch(() => ({}));
+							if (response.status === 429) {
+								const rateLimitError = parseRateLimitError(response, errorData);
+								console.error('[Gemini API] Rate limit exceeded (stream):', rateLimitError);
+								throw error(
+									response.status,
+									JSON.stringify({
+										error: 'Rate limit exceeded',
+										type: rateLimitError.type,
+										retryAfter: rateLimitError.retryAfter,
+										message: rateLimitError.message
+									})
+								);
+							}
+
+							const errorText = await response.text();
+							throw error(response.status, `Gemini API error: ${errorText}`);
 						}
 
-						const errorText = await response.text();
-						throw error(response.status, `Gemini API error: ${errorText}`);
+						return new Response(response.body, {
+							headers: {
+								'Content-Type': 'text/event-stream',
+								'Cache-Control': 'no-cache',
+								Connection: 'keep-alive'
+							}
+						});
+					} catch (fetchError) {
+						clearTimeout(timeoutId);
+						if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+							throw new Error(`Request timeout after ${REQUEST_TIMEOUT}ms`);
+						}
+						throw fetchError;
 					}
-
-					return new Response(response.body, {
-						headers: {
-							'Content-Type': 'text/event-stream',
-							'Cache-Control': 'no-cache',
-							Connection: 'keep-alive'
-						}
-					});
 				} else {
-					const response = await fetch(
-						`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
-						{
-							method: 'POST',
-							headers: {
-								'Content-Type': 'application/json'
-							},
-							body: JSON.stringify(requestBody)
-						}
-					);
+					// Create AbortController for timeout handling
+					const controller = new AbortController();
+					const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-					if (!response.ok) {
-						if (response.status === 429 && attempt < maxRetries) {
-							const errorData = await response.json().catch(() => ({}));
-							const rateLimitError = parseRateLimitError(response, errorData);
+					try {
+						const response = await fetch(
+							`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
+							{
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json'
+								},
+								body: JSON.stringify(requestBody),
+								signal: controller.signal
+							}
+						);
 
-							console.error('[Gemini API] Rate limit error:', {
-								attempt: attempt + 1,
-								type: rateLimitError.type,
-								retryAfter: rateLimitError.retryAfter,
-								message: rateLimitError.message
-							});
+						clearTimeout(timeoutId);
 
-							const retryDelay = rateLimitError.retryAfter || Math.pow(2, attempt) * 1000;
-							await new Promise((resolve) => setTimeout(resolve, retryDelay));
-							continue;
-						}
+						if (!response.ok) {
+							if (response.status === 429 && attempt < maxRetries) {
+								const errorData = await response.json().catch(() => ({}));
+								const rateLimitError = parseRateLimitError(response, errorData);
 
-						const errorData = await response.json().catch(() => ({}));
-						if (response.status === 429) {
-							const rateLimitError = parseRateLimitError(response, errorData);
-							console.error('[Gemini API] Rate limit exceeded:', rateLimitError);
-							throw error(
-								response.status,
-								JSON.stringify({
-									error: 'Rate limit exceeded',
+								console.error('[Gemini API] Rate limit error:', {
+									attempt: attempt + 1,
 									type: rateLimitError.type,
 									retryAfter: rateLimitError.retryAfter,
 									message: rateLimitError.message
-								})
-							);
+								});
+
+								const retryDelay = rateLimitError.retryAfter || Math.pow(2, attempt) * 1000;
+								await new Promise((resolve) => setTimeout(resolve, retryDelay));
+								continue;
+							}
+
+							const errorData = await response.json().catch(() => ({}));
+							if (response.status === 429) {
+								const rateLimitError = parseRateLimitError(response, errorData);
+								console.error('[Gemini API] Rate limit exceeded:', rateLimitError);
+								throw error(
+									response.status,
+									JSON.stringify({
+										error: 'Rate limit exceeded',
+										type: rateLimitError.type,
+										retryAfter: rateLimitError.retryAfter,
+										message: rateLimitError.message
+									})
+								);
+							}
+
+							const errorText = await response.text();
+							throw error(response.status, `Gemini API error: ${errorText}`);
 						}
 
-						const errorText = await response.text();
-						throw error(response.status, `Gemini API error: ${errorText}`);
+						const result = await response.json();
+						const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+						// Log response metadata for debugging
+						console.log('[Gemini API] Response received:', {
+							textLength: text.length,
+							hasFinishReason: !!result.candidates?.[0]?.finishReason,
+							finishReason: result.candidates?.[0]?.finishReason,
+							tokenCount: result.usageMetadata?.totalTokenCount
+						});
+
+						// Check if response was truncated
+						if (result.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+							console.warn('[Gemini API] Response was truncated due to maxOutputTokens limit');
+						}
+
+						return json({ text, success: true });
+					} catch (fetchError) {
+						clearTimeout(timeoutId);
+						if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+							throw new Error(`Request timeout after ${REQUEST_TIMEOUT}ms`);
+						}
+						throw fetchError;
 					}
-
-					const result = await response.json();
-					const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-					return json({ text, success: true });
 				}
 			} catch (err) {
 				if (err && typeof err === 'object' && 'status' in err) {
