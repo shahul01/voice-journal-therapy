@@ -2,6 +2,11 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
 	import { selectedProfile } from '$lib/stores/profile';
+	import {
+		conversationsStore,
+		activeConversation,
+		conversationList
+	} from '$lib/stores/conversations';
 	import { ConversationOrchestrator } from '$lib/utils/conversation/orchestrator';
 	import RateLimitIndicator from '$lib/components/RateLimitIndicator.svelte';
 	import ProfileDropdown from '$lib/components/ProfileDropdown.svelte';
@@ -26,13 +31,25 @@
 	let isSwitchingProfile = $state(false);
 	let breathingModalState = $state($breathingExerciseModal);
 	let emergencyContactModalOpen = $state(false);
+	let showConversationList = $state(false);
 
 	let orchestrator: ConversationOrchestrator | null = null;
 	let unsubscribeProfile: (() => void) | null = null;
 	let unsubscribeBreathingModal: (() => void) | null = null;
+	let unsubscribeActiveConversation: (() => void) | null = null;
 
 	onMount(() => {
-		loadConversationFromStorage();
+		// Initialize conversations - create first one if none exist
+		const currentConversations = get(conversationList);
+		if (currentConversations.length === 0) {
+			conversationsStore.createConversation();
+		}
+
+		// Load active conversation state
+		const active = get(activeConversation);
+		if (active) {
+			conversationState = active.state;
+		}
 
 		// Log initial profile
 		console.log('[App] Initial profile loaded:', {
@@ -52,6 +69,18 @@
 		unsubscribeBreathingModal = breathingExerciseModal.subscribe((state) => {
 			breathingModalState = state;
 		});
+
+		// Subscribe to active conversation changes
+		unsubscribeActiveConversation = activeConversation.subscribe((conv) => {
+			if (conv) {
+				conversationState = conv.state;
+				// Reinitialize orchestrator with new conversation state
+				if (orchestrator) {
+					orchestrator.stop();
+					initializeOrchestrator();
+				}
+			}
+		});
 	});
 
 	onDestroy(() => {
@@ -63,6 +92,9 @@
 		}
 		if (unsubscribeBreathingModal) {
 			unsubscribeBreathingModal();
+		}
+		if (unsubscribeActiveConversation) {
+			unsubscribeActiveConversation();
 		}
 	});
 
@@ -85,7 +117,7 @@
 		orchestrator = new ConversationOrchestrator({
 			onTranscriptUpdate: (state) => {
 				conversationState = state;
-				saveConversationToStorage();
+				saveConversationState();
 			},
 			onError: (error) => {
 				errorMessage = error.message;
@@ -200,25 +232,59 @@
 		}
 	}
 
-	function loadConversationFromStorage() {
-		if (typeof window === 'undefined') return;
-		try {
-			const stored = localStorage.getItem('conversation-state');
-			if (stored) {
-				conversationState = JSON.parse(stored);
-			}
-		} catch (err) {
-			console.error('Failed to load conversation from storage:', err);
+	/**
+	 * Creates a new conversation and switches to it
+	 */
+	function createNewConversation() {
+		// Stop current recording if active
+		if (orchestrator && isListening) {
+			orchestrator.stop();
+		}
+
+		const newId = conversationsStore.createConversation();
+		console.log('[App] Created new conversation:', newId);
+
+		// Reset error message
+		errorMessage = null;
+
+		// Close conversation list
+		showConversationList = false;
+	}
+
+	/**
+	 * Switches to a different conversation
+	 */
+	function switchConversation(conversationId: string) {
+		// Stop current recording if active
+		if (orchestrator && isListening) {
+			orchestrator.stop();
+		}
+
+		conversationsStore.setActiveConversation(conversationId);
+		console.log('[App] Switched to conversation:', conversationId);
+
+		// Reset error message
+		errorMessage = null;
+
+		// Close conversation list
+		showConversationList = false;
+	}
+
+	/**
+	 * Deletes a conversation
+	 */
+	function deleteConversation(conversationId: string) {
+		if (confirm('Delete this conversation? This cannot be undone.')) {
+			conversationsStore.deleteConversation(conversationId);
+			console.log('[App] Deleted conversation:', conversationId);
 		}
 	}
 
-	function saveConversationToStorage() {
-		if (typeof window === 'undefined') return;
-		try {
-			localStorage.setItem('conversation-state', JSON.stringify(conversationState));
-		} catch (err) {
-			console.error('Failed to save conversation to storage:', err);
-		}
+	/**
+	 * Saves the current conversation state to the store
+	 */
+	function saveConversationState() {
+		conversationsStore.updateActiveConversation(conversationState);
 	}
 
 	async function toggleListening() {
@@ -297,6 +363,75 @@
 
 <div class="home">
 	<h1>Voice Journal Therapy</h1>
+
+	<div class="conversation-management">
+		<div class="conversation-header">
+			<button
+				type="button"
+				class="conversation-toggle"
+				onclick={() => (showConversationList = !showConversationList)}
+				aria-label={showConversationList ? 'Hide conversations' : 'Show conversations'}
+			>
+				<span class="button-icon">💬</span>
+				{#if $activeConversation}
+					<span class="conversation-title">{$activeConversation.title}</span>
+				{:else}
+					<span class="conversation-title">No conversation</span>
+				{/if}
+				<span class="dropdown-icon">{showConversationList ? '▲' : '▼'}</span>
+			</button>
+
+			<button
+				type="button"
+				class="new-conversation-button"
+				onclick={createNewConversation}
+				disabled={isListening || currentState === 'processing'}
+				aria-label="Create new conversation"
+			>
+				<span class="button-icon">✨</span>
+				New
+			</button>
+		</div>
+
+		{#if showConversationList}
+			<div class="conversation-list">
+				{#if $conversationList.length === 0}
+					<div class="empty-conversations">No conversations yet</div>
+				{:else}
+					{#each $conversationList as conv (conv.id)}
+						<div
+							class="conversation-item"
+							class:active={$activeConversation?.id === conv.id}
+							onclick={() => switchConversation(conv.id)}
+							role="button"
+							tabindex="0"
+							onkeydown={(e) => e.key === 'Enter' && switchConversation(conv.id)}
+						>
+							<div class="conversation-item-content">
+								<div class="conversation-item-title">{conv.title}</div>
+								<div class="conversation-item-meta">
+									<span>{conv.state.messages.length} messages</span>
+									<span>·</span>
+									<span>{new Date(conv.updatedAt).toLocaleDateString()}</span>
+								</div>
+							</div>
+							<button
+								type="button"
+								class="delete-conversation-button"
+								onclick={(e) => {
+									e.stopPropagation();
+									deleteConversation(conv.id);
+								}}
+								aria-label="Delete conversation"
+							>
+								🗑️
+							</button>
+						</div>
+					{/each}
+				{/if}
+			</div>
+		{/if}
+	</div>
 
 	<div class="profile-section">
 		<ProfileDropdown disabled={isSwitchingProfile} onProfileChange={handleProfileChange} />
@@ -754,9 +889,209 @@
 		color: hsl(220, 20%, 85%);
 	}
 
+	/* Conversation Management Styles */
+	.conversation-management {
+		margin-bottom: 1.5rem;
+		background: hsl(220, 20%, 98%);
+		border-radius: 1rem;
+		padding: 1rem;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+	}
+
+	.dark .conversation-management {
+		background: hsl(220, 20%, 15%);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+	}
+
+	.conversation-header {
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+	}
+
+	.conversation-toggle {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.75rem 1rem;
+		background: white;
+		border: 1px solid hsl(220, 20%, 85%);
+		border-radius: 0.75rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		font-size: 0.95rem;
+	}
+
+	.dark .conversation-toggle {
+		background: hsl(220, 20%, 20%);
+		border-color: hsl(220, 20%, 30%);
+	}
+
+	.conversation-toggle:hover {
+		background: hsl(220, 20%, 97%);
+		border-color: hsl(220, 30%, 70%);
+	}
+
+	.dark .conversation-toggle:hover {
+		background: hsl(220, 20%, 25%);
+		border-color: hsl(220, 30%, 40%);
+	}
+
+	.conversation-title {
+		flex: 1;
+		text-align: left;
+		color: hsl(220, 30%, 30%);
+		font-weight: 500;
+	}
+
+	.dark .conversation-title {
+		color: hsl(220, 20%, 85%);
+	}
+
+	.dropdown-icon {
+		color: hsl(220, 20%, 60%);
+		font-size: 0.8rem;
+	}
+
+	.new-conversation-button {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1.25rem;
+		background: linear-gradient(135deg, hsl(220, 70%, 60%), hsl(240, 70%, 60%));
+		color: white;
+		border: none;
+		border-radius: 0.75rem;
+		cursor: pointer;
+		font-size: 0.95rem;
+		font-weight: 600;
+		transition: all 0.2s ease;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+	}
+
+	.new-conversation-button:hover:not(:disabled) {
+		transform: translateY(-1px);
+		box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+	}
+
+	.new-conversation-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.conversation-list {
+		margin-top: 0.75rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		max-height: 300px;
+		overflow-y: auto;
+	}
+
+	.empty-conversations {
+		padding: 1.5rem;
+		text-align: center;
+		color: hsl(220, 20%, 60%);
+		font-size: 0.9rem;
+	}
+
+	.conversation-item {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.75rem 1rem;
+		background: white;
+		border: 1px solid hsl(220, 20%, 90%);
+		border-radius: 0.5rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.dark .conversation-item {
+		background: hsl(220, 20%, 18%);
+		border-color: hsl(220, 20%, 25%);
+	}
+
+	.conversation-item:hover {
+		background: hsl(220, 30%, 97%);
+		border-color: hsl(220, 30%, 75%);
+		transform: translateX(4px);
+	}
+
+	.dark .conversation-item:hover {
+		background: hsl(220, 20%, 23%);
+		border-color: hsl(220, 30%, 35%);
+	}
+
+	.conversation-item.active {
+		background: hsl(220, 70%, 96%);
+		border-color: hsl(220, 70%, 70%);
+		box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
+	}
+
+	.dark .conversation-item.active {
+		background: hsl(220, 50%, 25%);
+		border-color: hsl(220, 50%, 45%);
+		box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+	}
+
+	.conversation-item-content {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.conversation-item-title {
+		font-weight: 500;
+		color: hsl(220, 30%, 30%);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		margin-bottom: 0.25rem;
+	}
+
+	.dark .conversation-item-title {
+		color: hsl(220, 20%, 85%);
+	}
+
+	.conversation-item-meta {
+		display: flex;
+		gap: 0.5rem;
+		font-size: 0.8rem;
+		color: hsl(220, 20%, 60%);
+	}
+
+	.dark .conversation-item-meta {
+		color: hsl(220, 20%, 65%);
+	}
+
+	.delete-conversation-button {
+		padding: 0.5rem;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		font-size: 1rem;
+		opacity: 0.6;
+		transition: all 0.2s ease;
+	}
+
+	.delete-conversation-button:hover {
+		opacity: 1;
+		transform: scale(1.2);
+	}
+
 	@media (max-width: 640px) {
 		.home {
 			padding: 1rem;
+		}
+
+		.conversation-header {
+			flex-direction: column;
+		}
+
+		.new-conversation-button {
+			width: 100%;
+			justify-content: center;
 		}
 
 		.message-user,
