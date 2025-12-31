@@ -5,7 +5,7 @@ import type { Profile } from '$lib/types/profile';
 const profiles: Profile[] = [
 	{
 		id: '1',
-		name: 'Calming 1 - Brittney',
+		name: 'Calming - Brittney',
 		config: {
 			voice_id: 'pjcYQlDFKMbcOUp6F5GD',
 			name: 'Brittney - Relaxing, Calm and Meditative',
@@ -20,7 +20,7 @@ const profiles: Profile[] = [
 	},
 	{
 		id: '2',
-		name: 'Soothing 1 - Daniel',
+		name: 'Soothing - Daniel',
 		config: {
 			voice_id: 'onwK4e9ZLuTAKqWW03F9',
 			name: 'Daniel - Soothing and Calming',
@@ -35,7 +35,7 @@ const profiles: Profile[] = [
 	},
 	{
 		id: '3',
-		name: 'Empathetic 1 - Jessica',
+		name: 'Empathetic - Jessica',
 		config: {
 			voice_id: 'g6xIsTj2HwM6VR4iXFCw',
 			name: 'Jessica Anne Bogart - Empathetic and expressive',
@@ -50,7 +50,7 @@ const profiles: Profile[] = [
 	},
 	{
 		id: '4',
-		name: 'Relaxing 1 - Mark',
+		name: 'Relaxing - Mark',
 		config: {
 			voice_id: '1SM7GgM6IMuvQlz2BwM3',
 			name: 'Mark - Relaxed and laid back',

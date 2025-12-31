@@ -1,5 +1,48 @@
 # Voice Journal Therapy - System Architecture Flowchart
 
+## Simplified Flow (Quick Overview)
+
+This is a high-level view of how the system works - perfect for understanding the basics.
+
+```mermaid
+flowchart LR
+    User["👤 User<br/>Speaks"] --> Mic["🎤 Microphone<br/>Captures Audio"]
+    Mic --> VAD["🔊 Voice Detection<br/>Detects Silence"]
+    VAD --> STT["🎙️ ElevenLabs<br/>Speech → Text"]
+    STT --> Crisis["🚨 Crisis Check<br/>Gemini AI"]
+    Crisis --> AI["🧠 Gemini AI<br/>Generates Response"]
+    AI --> TTS["🔊 ElevenLabs<br/>Text → Speech"]
+    TTS --> Speaker["🔊 Speaker<br/>Plays Response"]
+    Speaker --> User
+
+    style User fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    style Mic fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    style VAD fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    style STT fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    style Crisis fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+    style AI fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    style TTS fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    style Speaker fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+```
+
+**How it works:**
+1. **User speaks** into their device microphone
+2. **Voice Activity Detection** waits for silence (1.5 seconds)
+3. **ElevenLabs STT** converts speech to text
+4. **Crisis Detection** analyzes conversation for safety concerns
+5. **Gemini AI** generates an empathetic response
+6. **ElevenLabs TTS** converts response to natural speech
+7. **Audio plays back** to the user
+8. **Loop continues** automatically for continuous conversation
+
+**Key Technologies:**
+- 🎙️ **ElevenLabs**: Voice input/output (STT + TTS)
+- 🧠 **Google Gemini 2.5 Flash**: AI reasoning and crisis detection
+- 🔊 **Web Audio API**: Real-time voice activity detection
+- 💾 **Supabase**: User data and conversation storage
+
+---
+
 ## Complete System Flow
 
 ```mermaid
@@ -57,6 +100,14 @@ flowchart TB
         ContextWindow["Context Window<br/>(last 20 messages)"]
     end
 
+    %% Crisis Detection System
+    subgraph CrisisDetection["🚨 Crisis Detection"]
+        direction TB
+        CrisisAPI["Crisis Detection API<br/>(/api/v1/crisis/detect)"]
+        CrisisAnalysis["Analyze Messages<br/>(detectCrisisLevel)"]
+        CrisisResult["Crisis Result:<br/>level, confidence, indicators"]
+    end
+
     %% Audio Playback
     subgraph AudioPlayback["🔊 Audio Playback"]
         direction TB
@@ -102,6 +153,14 @@ flowchart TB
     MessagesArray -->|"Update contextWindow<br/>(last 20 messages)"| ContextWindowState
     ContextWindowState -->|"onTranscriptUpdate()"| ConversationDisplay
     MessagesArray -->|"saveConversationToStorage()"| LocalStorage
+
+    %% Crisis Detection
+    ProcessMethod -->|"detectAndHandleCrisis()"| CrisisAPI
+    MessagesArray -->|"Send messages array"| CrisisAPI
+    CrisisAPI -->|"Analyze conversation"| CrisisAnalysis
+    CrisisAnalysis -->|"Gemini 2.5 Flash<br/>(crisis detection)"| GeminiAPI
+    GeminiAPI -->|"Detection result"| CrisisResult
+    CrisisResult -->|"onCrisisDetected()"| ProcessMethod
 
     %% Get AI Response
     ProcessMethod -->|"getAIResponse()"| ResponseCache
@@ -155,12 +214,14 @@ flowchart TB
     classDef audioClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     classDef aiClass fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
     classDef stateClass fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef crisisClass fill:#ffebee,stroke:#b71c1c,stroke-width:2px
 
     class UI,UIState,ButtonState,ConversationDisplay uiClass
     class Orchestrator,OrchestratorState,StartMethod,StopMethod,ProcessMethod orchestratorClass
     class AudioCapture,MediaRecorder,AudioChunks,WAVConverter,WAVBlob,AudioPlayback,AudioPlaybackObj,PlayAudio,VAD,AudioContext,AnalyserNode,SpeechDetection,SpeechStart,SpeechEnd audioClass
     class ElevenLabs,STT,TTS,VertexAI,RequestQueue,RateLimitTracker,ResponseCache,GeminiAPI aiClass
     class ConversationState,MessagesArray,ContextWindowState,LocalStorage,ContextWindow stateClass
+    class CrisisDetection,CrisisAPI,CrisisAnalysis,CrisisResult crisisClass
 ```
 
 ## State Transition Diagram
@@ -220,6 +281,7 @@ sequenceDiagram
     participant VAD
     participant STT
     participant Gemini
+    participant CrisisDetection
     participant TTS
     participant AudioPlayback
 
@@ -253,6 +315,10 @@ sequenceDiagram
     STT-->>Orchestrator: Transcribed text
     Orchestrator->>Orchestrator: addMessage('user', text)
     Orchestrator->>UI: onTranscriptUpdate()
+    Orchestrator->>CrisisDetection: detectAndHandleCrisis()
+    CrisisDetection->>Gemini: Analyze for crisis indicators
+    Gemini-->>CrisisDetection: Crisis result (level, confidence)
+    CrisisDetection-->>Orchestrator: onCrisisDetected()
     Orchestrator->>Gemini: getAIResponse()<br/>(via RequestQueue)
     Gemini-->>Orchestrator: AI response text
     Orchestrator->>Orchestrator: addMessage('ai', text)
@@ -289,6 +355,7 @@ flowchart LR
 
     subgraph AI["🤖 AI Services"]
         ElevenLabs_STT["ElevenLabs STT<br/>(Speech → Text)"]
+        CrisisDetect["Crisis Detection<br/>(Gemini 2.5 Flash)"]
         Gemini["Gemini 2.5 Flash<br/>(Text → Response)"]
         ElevenLabs_TTS["ElevenLabs TTS<br/>(Text → Speech)"]
     end
@@ -307,9 +374,11 @@ flowchart LR
     Capture --> VAD_Proc
     VAD_Proc --> Conversion
     Conversion --> ElevenLabs_STT
-    ElevenLabs_STT --> Gemini
+    ElevenLabs_STT --> CrisisDetect
+    CrisisDetect --> Gemini
     Gemini --> ElevenLabs_TTS
     ElevenLabs_TTS --> AudioOut
+    ElevenLabs_STT --> UI_Display
     Gemini --> UI_Display
     UI_Display --> LocalStorage_Data
     Gemini --> Cache
