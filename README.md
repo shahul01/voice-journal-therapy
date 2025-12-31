@@ -1,6 +1,6 @@
-# voice-journal-therapy
+# VoiceGuard AI
 
-A SvelteKit project for a voice journal therapy app.
+## A friend and helper to talk to, to calm you down, relax, understand and help you through the day.
 
 ## Screenshots
 
@@ -8,31 +8,21 @@ A SvelteKit project for a voice journal therapy app.
 
 ![App](docs/screenshots/app.png)
 
-## sv
+## Deployment
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+[https://voice-journal-therapy.vercel.app/](https://voice-journal-therapy.vercel.app/)
 
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
+## Getting started
 
 ```sh
-# create a new project in the current directory
-npx sv create
+# copy the .env.example file to .env and fill in the values
+cp .env.example .env
 
-# create a new project in my-app
-npx sv create my-app
-```
+# pnpm is preferred over npm
+pnpm install
 
-## Developing
+pnpm run dev
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
 ## Building
@@ -40,9 +30,9 @@ npm run dev -- --open
 To create a production version of your app:
 
 ```sh
-npm run build
+pnpm run build
 ```
 
-You can preview the production build with `npm run preview`.
+You can preview the production build with `pnpm run preview`.
 
 > To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
