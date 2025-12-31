@@ -37,6 +37,8 @@
 	let unsubscribeProfile: (() => void) | null = null;
 	let unsubscribeBreathingModal: (() => void) | null = null;
 	let unsubscribeActiveConversation: (() => void) | null = null;
+	let isEditingName = $state(false);
+	let editingNameValue = $state('');
 
 	onMount(() => {
 		// Initialize conversations - create first one if none exist
@@ -302,6 +304,50 @@
 		conversationsStore.updateActiveConversation(conversationState);
 	}
 
+	/**
+	 * Starts editing the conversation name
+	 */
+	function startEditingName() {
+		if (!$activeConversation) return;
+		isEditingName = true;
+		editingNameValue = $activeConversation.title;
+	}
+
+	/**
+	 * Saves the edited conversation name
+	 */
+	function saveConversationName() {
+		if (!$activeConversation || !editingNameValue.trim()) {
+			cancelEditingName();
+			return;
+		}
+
+		conversationsStore.updateConversationName($activeConversation.id, editingNameValue);
+		isEditingName = false;
+		editingNameValue = '';
+	}
+
+	/**
+	 * Cancels editing the conversation name
+	 */
+	function cancelEditingName() {
+		isEditingName = false;
+		editingNameValue = '';
+	}
+
+	/**
+	 * Handles keydown events in the name input
+	 */
+	function handleNameInputKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			saveConversationName();
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			cancelEditingName();
+		}
+	}
+
 	async function toggleListening() {
 		if (!orchestrator) return;
 
@@ -381,20 +427,47 @@
 
 	<div class="conversation-management">
 		<div class="conversation-header">
-			<button
-				type="button"
-				class="conversation-toggle"
-				onclick={() => (showConversationList = !showConversationList)}
-				aria-label={showConversationList ? 'Hide conversations' : 'Show conversations'}
-			>
-				<span class="button-icon">💬</span>
-				{#if $activeConversation}
-					<span class="conversation-title">{$activeConversation.title}</span>
-				{:else}
-					<span class="conversation-title">No conversation</span>
+			<div class="conversation-toggle-wrapper">
+				<button
+					type="button"
+					class="conversation-toggle"
+					onclick={() => (showConversationList = !showConversationList)}
+					aria-label={showConversationList ? 'Hide conversations' : 'Show conversations'}
+					disabled={isEditingName}
+				>
+					<span class="button-icon">💬</span>
+					{#if isEditingName}
+						<input
+							type="text"
+							class="conversation-name-input"
+							bind:value={editingNameValue}
+							onkeydown={handleNameInputKeydown}
+							onblur={saveConversationName}
+							placeholder="Enter conversation name"
+							autofocus
+							onclick={(e) => e.stopPropagation()}
+						/>
+					{:else if $activeConversation}
+						<span class="conversation-title">{$activeConversation.title}</span>
+					{:else}
+						<span class="conversation-title">No conversation</span>
+					{/if}
+					<span class="dropdown-icon">{showConversationList ? '▲' : '▼'}</span>
+				</button>
+
+				{#if $activeConversation && !isEditingName}
+					<button
+						type="button"
+						class="edit-name-button"
+						onclick={startEditingName}
+						disabled={isListening || currentState === 'processing'}
+						aria-label="Edit conversation name"
+						title="Edit conversation name"
+					>
+						✏️
+					</button>
 				{/if}
-				<span class="dropdown-icon">{showConversationList ? '▲' : '▼'}</span>
-			</button>
+			</div>
 
 			<button
 				type="button"
@@ -924,6 +997,13 @@
 		align-items: center;
 	}
 
+	.conversation-toggle-wrapper {
+		flex: 1;
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
 	.conversation-toggle {
 		flex: 1;
 		display: flex;
@@ -936,6 +1016,11 @@
 		cursor: pointer;
 		transition: all 0.2s ease;
 		font-size: 0.95rem;
+	}
+
+	.conversation-toggle:disabled {
+		cursor: default;
+		opacity: 1;
 	}
 
 	.dark .conversation-toggle {
@@ -967,6 +1052,58 @@
 	.dropdown-icon {
 		color: hsl(220, 20%, 60%);
 		font-size: 0.8rem;
+	}
+
+	.conversation-name-input {
+		flex: 1;
+		padding: 0.25rem 0.5rem;
+		background: hsl(220, 20%, 98%);
+		border: 2px solid hsl(220, 50%, 60%);
+		border-radius: 0.375rem;
+		font-size: 0.95rem;
+		color: hsl(220, 30%, 30%);
+		font-weight: 500;
+		outline: none;
+		font-family: inherit;
+	}
+
+	.dark .conversation-name-input {
+		background: hsl(220, 20%, 15%);
+		color: hsl(220, 20%, 85%);
+		border-color: hsl(220, 50%, 50%);
+	}
+
+	.edit-name-button {
+		padding: 0.5rem 0.75rem;
+		background: hsl(220, 20%, 97%);
+		border: 1px solid hsl(220, 20%, 85%);
+		border-radius: 0.5rem;
+		cursor: pointer;
+		font-size: 1rem;
+		transition: all 0.2s ease;
+		opacity: 0.7;
+	}
+
+	.dark .edit-name-button {
+		background: hsl(220, 20%, 22%);
+		border-color: hsl(220, 20%, 30%);
+	}
+
+	.edit-name-button:hover:not(:disabled) {
+		opacity: 1;
+		background: hsl(220, 30%, 95%);
+		border-color: hsl(220, 30%, 70%);
+		transform: scale(1.05);
+	}
+
+	.dark .edit-name-button:hover:not(:disabled) {
+		background: hsl(220, 20%, 28%);
+		border-color: hsl(220, 30%, 40%);
+	}
+
+	.edit-name-button:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
 
 	.new-conversation-button {
@@ -1102,6 +1239,10 @@
 
 		.conversation-header {
 			flex-direction: column;
+		}
+
+		.conversation-toggle-wrapper {
+			width: 100%;
 		}
 
 		.new-conversation-button {

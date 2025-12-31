@@ -180,6 +180,37 @@ function createConversationsStore() {
 		},
 
 		/**
+		 * Updates the name/title of a conversation
+		 */
+		updateConversationName: (id: string, newTitle: string): void => {
+			const trimmedTitle = newTitle.trim();
+			if (!trimmedTitle) {
+				console.warn('[Conversations] Cannot set empty title');
+				return;
+			}
+
+			store.update((data) => {
+				const conversations = data.conversations.map((conv) => {
+					if (conv.id === id) {
+						return {
+							...conv,
+							title: trimmedTitle,
+							updatedAt: Date.now()
+						};
+					}
+					return conv;
+				});
+
+				return {
+					...data,
+					conversations
+				};
+			});
+
+			console.log('[Conversations] Updated conversation name:', id, trimmedTitle);
+		},
+
+		/**
 		 * Clears all conversations
 		 */
 		clearAll: (): void => {
