@@ -57,6 +57,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(400, 'Invalid email format');
 	}
 
+	// Get sender name from user metadata or email
+	const { data: userMetadata } = await locals.supabase.auth.getUser();
+	const senderName =
+		userMetadata?.user?.user_metadata?.full_name ||
+		userMetadata?.user?.user_metadata?.name ||
+		userMetadata?.user?.email?.split('@')[0] ||
+		user.email?.split('@')[0] ||
+		'A user';
+
 	const { data, error: dbError } = await locals.supabase
 		.from('emergency_contacts')
 		.insert({
@@ -67,7 +76,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			relation: body.relation.trim(),
 			default_message: body.default_message?.trim() || null,
 			notification_method: body.notification_method || 'email',
-			priority: body.priority ?? 0
+			priority: body.priority ?? 0,
+			sender_name: senderName
 		})
 		.select()
 		.single();
@@ -80,7 +90,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	return json({ success: true, data });
-};;
+};;;;
 
 export const PATCH: RequestHandler = async ({ request, locals }) => {
 	const { session, user } = await locals.safeGetSession();
@@ -134,6 +144,27 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	const phoneNumber =
 		body.phone_number !== undefined ? body.phone_number?.trim() || null : undefined;
 
+	// Get sender name from user metadata or email (update if not set)
+	const { data: contactData } = await locals.supabase
+		.from('emergency_contacts')
+		.select('sender_name')
+		.eq('id', body.id)
+		.eq('user_id', user.id)
+		.single();
+
+	let senderName = contactData?.sender_name;
+
+	// If sender_name is not set, populate it now
+	if (!senderName) {
+		const { data: userMetadata } = await locals.supabase.auth.getUser();
+		senderName =
+			userMetadata?.user?.user_metadata?.full_name ||
+			userMetadata?.user?.user_metadata?.name ||
+			userMetadata?.user?.email?.split('@')[0] ||
+			user.email?.split('@')[0] ||
+			'A user';
+	}
+
 	const updateData: Partial<EmergencyContact> = {};
 	if (body.name !== undefined) updateData.name = body.name.trim();
 	if (phoneNumber !== undefined) updateData.phone_number = phoneNumber;
@@ -145,6 +176,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		updateData.notification_method = body.notification_method;
 	if (body.is_active !== undefined) updateData.is_active = body.is_active;
 	if (body.priority !== undefined) updateData.priority = body.priority;
+	// Always ensure sender_name is set
+	updateData.sender_name = senderName;
 
 	const { data, error: dbError } = await locals.supabase
 		.from('emergency_contacts')
@@ -160,7 +193,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	}
 
 	return json({ success: true, data });
-};;
+};;;
 
 export const DELETE: RequestHandler = async ({ request, locals }) => {
 	const { session, user } = await locals.safeGetSession();

@@ -15,6 +15,7 @@ export interface EmergencyContact {
 	notification_method: NotificationMethod;
 	is_active: boolean;
 	priority: number;
+	sender_name: string | null;
 	created_at: string;
 	updated_at: string;
 }

@@ -6,7 +6,6 @@ import type { CrisisSeverity } from '$lib/types/emergency';
 
 interface TestAlertInput {
 	severity: CrisisSeverity;
-	user_name?: string;
 }
 
 const COOLDOWN_HOURS = 1; // Max 1 alert per hour per contact
@@ -82,8 +81,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		.eq('user_id', user.id)
 		.single();
 
-	const userName = body.user_name || userProfile?.about || user.email || 'A user';
-
 	// Get active emergency contacts
 	const { data: contacts, error: contactsError } = await locals.supabase
 		.from('emergency_contacts')
@@ -119,14 +116,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			continue;
 		}
 
-		// Send alert
+		// Send alert (sender_name is already stored in contact)
 		const alertResult = await sendAlertToContact(
 			contact,
-			userName,
 			RESEND_API_KEY ? { resendApiKey: RESEND_API_KEY } : undefined
 		);
 
-		// Determine message to log
+		// Determine message to log (uses sender_name from contact)
+		const userName = contact.sender_name || 'A user';
 		const message =
 			contact.default_message ||
 			`Hi ${contact.name}, this is an automated alert from VoiceGuard. ${userName} may need support right now. If possible, please check in with them. This is not an emergency service - if immediate help is needed, call 988 (Suicide & Crisis Lifeline). - VoiceGuard Support Network`;

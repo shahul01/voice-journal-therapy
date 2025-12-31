@@ -3,15 +3,13 @@ import type { EmergencyContact } from '$lib/types/emergency';
 interface SendEmailAlertInput {
 	to: string;
 	contactName: string;
-	userName: string;
-	message?: string;
+	contact: EmergencyContact;
 }
 
 interface SendSMSAlertInput {
 	to: string;
 	contactName: string;
-	userName: string;
-	message?: string;
+	contact: EmergencyContact;
 }
 
 const DEFAULT_ALERT_MESSAGE = `Hi {contactName}, this is an automated alert from VoiceGuard.
@@ -35,13 +33,26 @@ function generateAlertMessage(
 }
 
 /**
+ * Gets the user's display name for alerts
+ * Uses the sender_name from the contact if available, or falls back to user metadata
+ */
+function getUserDisplayName(contact: EmergencyContact): string {
+	// Use sender_name from contact (stored when contact was created)
+	if (contact.sender_name) {
+		return contact.sender_name;
+	}
+
+	// Fallback to 'A user' if somehow not set
+	return 'A user';
+}
+
+/**
  * Sends email alert using Resend API
  */
 export async function sendEmailAlert({
 	to,
 	contactName,
-	userName,
-	message,
+	contact,
 	apiKey
 }: SendEmailAlertInput & { apiKey?: string }): Promise<{ success: boolean; error?: string }> {
 	const RESEND_API_KEY = apiKey || process.env.RESEND_API_KEY;
@@ -52,7 +63,8 @@ export async function sendEmailAlert({
 	}
 
 	try {
-		const alertMessage = generateAlertMessage(contactName, userName, message);
+		const userName = getUserDisplayName(contact);
+		const alertMessage = generateAlertMessage(contactName, userName, contact.default_message);
 
 		const response = await fetch('https://api.resend.com/emails', {
 			method: 'POST',
@@ -99,8 +111,7 @@ export async function sendEmailAlert({
 export async function sendSMSAlert({
 	to,
 	contactName,
-	userName,
-	message,
+	contact,
 	credentials
 }: SendSMSAlertInput & {
 	credentials?: {
@@ -118,7 +129,8 @@ export async function sendSMSAlert({
 	const TWILIO_PHONE_NUMBER = credentials.phoneNumber;
 
 	try {
-		const alertMessage = generateAlertMessage(contactName, userName, message);
+		const userName = getUserDisplayName(contact);
+		const alertMessage = generateAlertMessage(contactName, userName, contact.default_message);
 
 		const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
 		const body = new URLSearchParams({
@@ -168,7 +180,6 @@ export async function sendSMSAlert({
  */
 export async function sendAlertToContact(
 	contact: EmergencyContact,
-	userName: string,
 	options?: {
 		resendApiKey?: string;
 		twilioCredentials?: {
@@ -178,7 +189,7 @@ export async function sendAlertToContact(
 		};
 	}
 ): Promise<{ success: boolean; error?: string; method?: 'email' | 'sms' }> {
-	const { notification_method, email, phone_number, name, default_message } = contact;
+	const { notification_method, email, phone_number, name } = contact;
 
 	let result: { success: boolean; error?: string; method?: 'email' | 'sms' } | undefined;
 
@@ -190,8 +201,7 @@ export async function sendAlertToContact(
 		result = await sendEmailAlert({
 			to: email,
 			contactName: name,
-			userName,
-			message: default_message || undefined,
+			contact,
 			apiKey: options?.resendApiKey
 		});
 
@@ -212,8 +222,7 @@ export async function sendAlertToContact(
 		result = await sendSMSAlert({
 			to: phone_number,
 			contactName: name,
-			userName,
-			message: default_message || undefined,
+			contact,
 			credentials: options.twilioCredentials
 		});
 
